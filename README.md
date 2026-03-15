@@ -1,6 +1,6 @@
 # fmjrey/project
 
-Utility library to support a `:project` entry in `deps.edn**.
+Utility library to support a `:project` entry in `deps.edn`.
 
 ** WORK IN PROGRESS **
 
@@ -233,4 +233,4 @@ Your library will be deployed to net.clojars.fmjrey/project on clojars.org by de
 
 Copyright © 2026 François Rey
 
-Distributed under the [MIT No Attribution](https://github.com/aws/mit-0)
+Distributed under the [Eclipse Public License 2.0](https://www.eclipse.org/legal/epl-2.0)

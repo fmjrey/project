@@ -24,8 +24,8 @@
    [:url "https://github.com/fmjrey/project"]
    [:licenses
     [:license
-     [:name "MIT No Attribution"]
-     [:url "https://github.com/aws/mit-0"]]]
+     [:name "Eclipse Public License 2.0"]
+     [:url "https://www.eclipse.org/legal/epl-2.0"]]]
    [:developers
     [:developer
      [:name "Francois"]]]
