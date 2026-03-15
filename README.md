@@ -2,7 +2,7 @@
 
 Utility library to support a `:project` entry in `deps.edn`.
 
-** WORK IN PROGRESS **
+**WORK IN PROGRESS**
 
 ## Rationale
 
@@ -39,15 +39,18 @@ In terms of design there are some special cases to consider:
 
 1. Q: If both `deps.edn` in project root and resource directory are available,
    which one is loaded?
-   A: Load from project root first, and if not found it try as a resource.
+   
+   A: Load from project root first, and if not found try as a resource.
 2. Q: How to ensure a library is loading its own `deps.edn` and not the one
    from another library or even the dependent application?
+
    A: Store an `deps.edn` copy into the `deps/<group-id>/<artifact-id>/`
    resource directory. Search `deps.edn` first in project root then in
    the resource directory, accepting the first that matches a given
    `groupId/artifactId`.
 3. Q: Can a source dependency (git or local) access its own `deps.edn`
    from within its code?
+
    A: TBD. A dependency provided as a jar is not guaranteed to have its
    `deps.edn` packaged along the code, whereas its own resources certainly are.
    Source dependencies however should only have a `deps.edn` in project root
@@ -144,11 +147,15 @@ This library can be used in 3 different ways:
 
 These require the following dependency declaration in your `deps.edn`:
 
-    fmjrey/project {:git/tag "TBD" :git/sha "TBD"}
+```clojure
+fmjrey/project {:git/tag "TBD" :git/sha "TBD"}
+```
 
 In all cases the require entry should be as follows:
 
-    [fmjrey/project :as project]
+```clojure
+[fmjrey/project :as project]
+```
 
 ### Use as a runtime library
 
@@ -167,10 +174,10 @@ that must have a `:lib` entry in the format `groupId/artifactId`:
 
 - `read-deps`: loads the project data from either `deps.edn` in project root
   or its copy as a resource, whichever is found first and matches the given
-  lib symbol to make sure it finds the right `deps.edn` file. Return the given
+  lib symbol to make sure it finds the right `deps.edn` file. Returns the given
   option map augmented with a `:project` entry.
 - `read-all-deps`: load project data from `deps.edn` using various combinations
-  of paths, file, and resource loading, returning a sequences of options map
+  of paths, file, and resource loading, returning a sequence of options maps
   augmented with a `:project` entry, among others. Useful for testing and
   experimentation.
 
