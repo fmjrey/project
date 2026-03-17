@@ -179,18 +179,19 @@ in order to define a var to capture the `:project` map, .e.g:
 Alternatively you can use the following functions that take an options map
 that must have a `:lib` entry in the format `groupId/artifactId`:
 
-- `read-deps`: loads the project data from either `deps.edn` in project root
+- `read-project`: loads the project data from either `deps.edn` in project root
   or its copy as a resource, whichever is found first and matches the given
   lib symbol to make sure it finds the right `deps.edn` file. Returns the given
   option map augmented with a `:project` entry if a matching one is found.
-- `read-all-deps`: load project data from `deps.edn` using various combinations
-  of paths, file, and resource loading, returning a sequence of options maps
-  augmented with a `:project` entry, among others. Useful for testing and
-  experimentation.
+- `searched-deps`: list all `deps.edn` files or resource files checked
+  for a matching project entry. This is mostly for experimentation and testing
+  so as to check the different combinations of paths, files, and resources that
+  are checked. Returns a sequence of options maps augmented with various
+  working keys and a `:project` entry when a matching id is found.
 
-For experimentation `print-deps` and `print-all-deps` offer exactly the same
-functionality as their respective counterparts, except they print the files or
-resources that have been searched for a matching project entry.
+For experimentation `print-project` and `print-searched-deps` offer exactly
+the same functionality as their above counterparts, except they print the
+files or resources that have been searched for a matching project entry.
 To also print the matching project entries add `:fmjrey.project/verbose :very`
 to the options map. Printing is in fact controlled by this option which is set
 to `true` by the printing functions (unless `:very` is passed).
@@ -214,7 +215,7 @@ They return that hash map unchanged unless otherwise stated.
 - `copy-deps`: copy the project root `deps.edn` to a resource directory.
   Options map must have a `:lib` entry in the format `groupId/artifactId`.
   Return the options map unchanged. (TODO)
-- `read-deps`, `read-all-deps`, and their printing alternate: same as the
+- `read-project`, `searched-deps`, and their printing alternate: same as the
   runtime functions.
 
 ### Use from clojure CLI
@@ -226,7 +227,7 @@ CLI with the -T option:
 # copy project deps.edn to the resource directory
 clojure -T:build fmjrey.project.build/copy-deps :lib myorg/mylib
 # read project deps.edn
-clojure -T:build fmjrey.project.build/read-deps :lib myorg/mylib
+clojure -T:build fmjrey.project.build/read-project :lib myorg/mylib
 ```
 
 ## Development (TODO)

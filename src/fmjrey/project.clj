@@ -126,9 +126,9 @@
       (print-opts opts)
       opts)))
 
-(defn read-deps
+(defn read-project
   [{:keys [lib ::verbose] :as opts}]
-  (when (valid-opts? "read-deps" opts)
+  (when (valid-opts? "read-project" opts)
     (let [found (->> opts
                      expand-opts
                      unchunk
@@ -142,22 +142,22 @@
         (do (when verbose (println "No matching deps.edn found for" lib))
             opts)))))
 
-(defn print-deps
+(defn print-project
   [opts]
-  (read-deps (if (::verbose opts) opts (assoc opts ::verbose true))))
+  (read-project (if (::verbose opts) opts (assoc opts ::verbose true))))
 
-(defn read-all-deps
+(defn searched-deps
   [opts]
-  (when (valid-opts? "read-all-deps" opts)
+  (when (valid-opts? "searched-deps" opts)
     (let [opts-seq (expand-opts opts)]
       (->> opts-seq
            (map read-edn)
            (map validate)
            doall))))
 
-(defn print-all-deps
+(defn print-searched-deps
   [opts]
-  (read-all-deps (if (::verbose opts) opts (assoc opts ::verbose true))))
+  (searched-deps (if (::verbose opts) opts (assoc opts ::verbose true))))
 
 (defmacro get-caller-classloader
   []
@@ -168,5 +168,5 @@
   ([op lib]
    `(when (valid-lib? ~op ~lib)
       (some-> {:lib ~lib ::loader (get-caller-classloader)}
-              read-deps
+              read-project
               :project))))
