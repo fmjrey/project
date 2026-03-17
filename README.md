@@ -2,7 +2,7 @@
 
 Utility library to support a `:project` entry in `deps.edn`.
 
-**WORK IN PROGRESS**
+**EXPERIMENTAL WORK IN PROGRESS**
 
 ## Rationale
 
@@ -23,8 +23,8 @@ direct dependency objects.
 A major hurdle at present is that neither are guaranteed to be present
 in a release artifact, certainly not `build.clj` as many projects don't need
 one, or even are required to name it so. The trend to use direct git coordinates
-may provide a way to access `deps.edn`, but then at runtime the root project
-directory isn't normally included on the classpath (TODO: validate).
+may provide a way to access `deps.edn`, and in any case a jar does not usually
+contain the `deps.edn` unless it's copied in a resource directory before a build.
 
 Still, having a well defined place to capture project metadata helps
 tremendously different uses cases, such as discovery and tooling.
