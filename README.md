@@ -39,8 +39,9 @@ In terms of design there are some special cases to consider:
 
 1. Q: If both `deps.edn` in project root and resource directory are available,
    which one is loaded?
-   
+ 
    A: Load from project root first, and if not found try as a resource.
+   
 2. Q: How to ensure a library is loading its own `deps.edn` and not the one
    from another library or even the dependent application?
 
@@ -48,7 +49,8 @@ In terms of design there are some special cases to consider:
    resource directory. Search `deps.edn` first in project root then in
    the resource directory, accepting the first that matches a given
    `groupId/artifactId`.
-3. Q: Can a source dependency (git or local) access its own `deps.edn`
+   
+3. Q: Can a source dependency (git or local) access its own project `deps.edn`
    from within its code?
 
    A: TBD. A dependency provided as a jar is not guaranteed to have its
@@ -145,16 +147,15 @@ This library can be used in 3 different ways:
 2. within your project `build.clj` or equivalent
 3. as a clojure CLI command with the -T option
 
-These require the following dependency declaration in your `deps.edn`:
+These require the following dependency declaration in your project `deps.edn`:
 
 ```clojure
-fmjrey/project {:git/tag "TBD" :git/sha "TBD"}
-```
-
-In all cases the require entry should be as follows:
-
-```clojure
-[fmjrey/project :as project]
+{:deps {fmjrey/project {:git/tag "TAG" :git/sha "SHA"}} ;; runtime use
+ :aliases
+ ;; build and CLI use
+ {:build {:deps {io.github.clojure/tools.build {:git/tag "TAG" :git/sha "SHA"}
+                 fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
+          :ns-default build}}}
 ```
 
 ### Use as a runtime library
@@ -162,8 +163,14 @@ In all cases the require entry should be as follows:
 Having access to project data can be useful for printing or logging information
 at runtime, e.g. a header string containing name and version upon startup.
 
+The require entry should be as follows for runtime use:
+
+```clojure
+[fmjrey.project :as project]
+```
+
 The easiest way to load project data is to use the macro `project/project-info`
-in order to define a var containing project information, .e.g:
+in order to define a var to capture the `:project` map, .e.g:
 
 ```clojure
 (def app-info (project/project-info 'my/app))
@@ -175,24 +182,40 @@ that must have a `:lib` entry in the format `groupId/artifactId`:
 - `read-deps`: loads the project data from either `deps.edn` in project root
   or its copy as a resource, whichever is found first and matches the given
   lib symbol to make sure it finds the right `deps.edn` file. Returns the given
-  option map augmented with a `:project` entry.
+  option map augmented with a `:project` entry if a matching one is found.
 - `read-all-deps`: load project data from `deps.edn` using various combinations
   of paths, file, and resource loading, returning a sequence of options maps
   augmented with a `:project` entry, among others. Useful for testing and
   experimentation.
 
+For experimentation `print-deps` and `print-all-deps` offer exactly the same
+functionality as their respective counterparts, except they print the files or
+resources that have been searched for a matching project entry.
+To also print the matching project entries add `:fmjrey.project/verbose :very`
+to the options map. Printing is in fact controlled by this option which is set
+to `true` by the printing functions (unless `:very` is passed).
+
 ### Use within build.clj
 
 The most typical use within `build.clj` is to create tasks related to project
-versioning and release. The following task function are provided, they each
-take an options map as single argument that must contain a `:lib` entry in the
-format `groupId/artifactId`. They return that hash map unchanged unless
-otherwise stated.
+versioning and release.
+
+The require entry should be as follows:
+
+```clojure
+[fmjrey.project :as project]  ;; 
+[fmjrey.project.build :as bp] ;; this is where the copy task is defined
+```
+
+The following task function are provided, each taking an options map as single
+argument that must contain a `:lib` entry in the format `groupId/artifactId`.
+They return that hash map unchanged unless otherwise stated.
 
 - `copy-deps`: copy the project root `deps.edn` to a resource directory.
-  Options map must have a `:lib` entry in the format `groupId/artifactId`
-  (TODO).
-- `read-deps` and `read-all-deps`: same as above.
+  Options map must have a `:lib` entry in the format `groupId/artifactId`.
+  Return the options map unchanged. (TODO)
+- `read-deps`, `read-all-deps`, and their printing alternate: same as the
+  runtime functions.
 
 ### Use from clojure CLI
 
@@ -201,9 +224,9 @@ CLI with the -T option:
 
 ```
 # copy project deps.edn to the resource directory
-clojure -T:build fmjrey.project/copy-deps :lib myorg/mylib
+clojure -T:build fmjrey.project.build/copy-deps :lib myorg/mylib
 # read project deps.edn
-clojure -T:build fmjrey.project/read-deps :lib myorg/mylib
+clojure -T:build fmjrey.project.build/read-deps :lib myorg/mylib
 ```
 
 ## Development (TODO)

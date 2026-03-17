@@ -113,9 +113,16 @@
 ; Make sure the portal window is opened before these
 
   (do (inspect/clear) (namespace/refresh)
-      (mulog/log
-       ::read-deps :opts
-       (project/read-all-deps {:lib 'fmjrey/project})))
+      (let [opts (project/read-all-deps {:lib 'fmjrey/project
+                                         :fmjrey.project/verbose :very})]
+        (mulog/log ::read-all-deps :opts opts)
+        opts))
+
+  (do (inspect/clear) (namespace/refresh)
+      (let [opts (project/read-deps {:lib 'fmjrey/project
+                                     :fmjrey.project/verbose :very})]
+        (mulog/log ::read-deps :opts opts)
+        opts))
 
   (do (inspect/clear) (namespace/refresh)
       (project/project-info 'fmjrey/project))

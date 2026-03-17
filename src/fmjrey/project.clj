@@ -1,11 +1,26 @@
 (ns fmjrey.project
-  (:require [clojure.java.io :as io]
+  (:import [java.lang StringBuilder]
+           [java.io File])
+  (:require [clojure.string :as str]
+            [clojure.pprint :as pp]
+            [clojure.java.io :as io]
             [clojure.tools.deps.edn :as deps]
             [fmjrey.project.specs :as specs]))
 
 (set! *warn-on-reflection* true)
 
-(def ^:private fsep java.io.File/separator)
+(defn- unchunk [s]
+  (when (seq s)
+    (lazy-seq
+      (cons (first s)
+            (unchunk (next s))))))
+
+(defn- remove-work-keys
+  [m]
+  (into {} (remove (fn [[k _]]
+                     (and (keyword? k)
+                          (= (namespace k) (namespace ::here))))
+                   m)))
 
 (defn valid-lib?
   ([op lib] (valid-lib? op lib {}))
@@ -35,7 +50,7 @@
     (catch Exception _ nil)))
 
 (defn validate
-  [{:keys [lib path project] :as opts}]
+  [{:keys [::path ::project] :as opts}]
   (if project
     (if (specs/valid-project? project)
       opts
@@ -46,55 +61,90 @@
           opts)))
     opts))
 
-(defn read-edn
-  [{file-or-res :file-or-res :as opts}]
-  (if file-or-res
-    (with-open [rdr (io/reader file-or-res)]
-      ;(println "Reading" (-> opts :type name) (:path opts))
-      (if-let [p (some-> rdr (deps/read-edn opts) :project)]
-        (assoc opts :project p)
-        opts))
-    opts))
-
-(defn unchunk [s]
-  (when (seq s)
-    (lazy-seq
-      (cons (first s)
-            (unchunk (next s))))))
-
 (defn expand-opts
-  "I don't do a whole lot."
-  [{:keys [lib loader] :as opts}]
+  [{:keys [lib ::loader] :as opts}]
   (->> ["deps.edn" (->> ["deps" (namespace lib) (name lib) "deps.edn"]
-                        (interpose fsep)
+                        (interpose File/separator)
                         (apply str))]
-       (mapcat (fn [p] [(assoc opts :path p)
-                        (assoc opts :path (str fsep p))]))
-       (mapcat (fn [{p :path :as opts}]
-                 (cond-> [(assoc opts :type :file :file-or-res (readable? p))]
+       (mapcat (fn [p] [(assoc opts ::path p)
+                        (assoc opts ::path (str File/separator p))]))
+       (mapcat (fn [{p ::path :as opts}]
+                 (cond-> [(assoc opts ::type ::file ::file-or-res (readable? p))]
                    true (conj (-> opts
-                                  (dissoc :loader)
-                                  (assoc :type :res
-                                         :file-or-res
+                                  (dissoc ::loader)
+                                  (assoc ::type ::resource
+                                         ::file-or-res
                                          (io/resource p))))
-                   loader (conj (assoc opts :type :res
-                                       :file-or-res
+                   loader (conj (assoc opts ::type ::resource
+                                       ::file-or-res
                                        (io/resource p loader))))))))
 
+(defn- print-opts
+  [{:keys [lib project ::path ::type ::file-or-res ::verbose] :as opts}]
+  (let [match? (and project (= (:id project) lib))
+        print-project? (and match? (= :very verbose))
+        msg (as-> (StringBuilder.) $
+              (.append $ (-> type name str/capitalize))
+              (.append $ " ")
+              (.append $ path)
+              (.append $ ", ")
+              (if file-or-res
+                (.append $ "found and readable")
+                (.append $ "not found or readable"))
+              (if match?
+                (.append $ ", matching id")
+                (if project
+                  (-> (.append $ ", mismatching id ")
+                      (.append (:id project)))
+                  (if file-or-res
+                    (.append $ ", no project entry")
+                    $)))
+              (if print-project? (.append $ ":") $)
+              (.append $ "\n")
+              (if print-project?
+                (->> (with-out-str (pp/pprint project))
+                     str/split-lines
+                     (reduce (fn [^StringBuilder r l]
+                               (-> (.append r "  ")
+                                   (.append l)
+                                   (.append "\n")))
+                             $))
+                $)
+              (str $))]
+    (print msg)
+    (flush)
+    opts))
+
+(defn read-edn
+  [{:keys [::file-or-res ::verbose] :as opts}]
+  (let [opts (or (when file-or-res
+                   (with-open [rdr (io/reader file-or-res)]
+                     (when-let [p (some-> rdr (deps/read-edn opts) :project)]
+                       (assoc opts :project p))))
+                 opts)]
+    (if verbose
+      (print-opts opts)
+      opts)))
+
 (defn read-deps
-  [opts]
+  [{:keys [lib ::verbose] :as opts}]
   (when (valid-opts? "read-deps" opts)
-    (let [opts-seq (-> opts expand-opts unchunk)]
-      (->> opts-seq
-           (map read-edn)
-           (map validate)
-           (some (fn [opts]
-                   (let [id (some-> opts :project :id)]
-                     #_(if (= lib id)
-                         (println "Matched" (-> opts :type name) (:path opts))
-                         (println "Mismatch" (-> opts :type name)
-                                  (:path opts) id))
-                     opts)))))))
+    (let [found (->> opts
+                     expand-opts
+                     unchunk
+                     (map read-edn)
+                     (map validate)
+                     (some (fn [opts]
+                             (and (= lib (some-> opts :project :id))
+                                  opts))))]
+      (if found
+        (remove-work-keys found)
+        (do (when verbose (println "No matching deps.edn found for" lib))
+            opts)))))
+
+(defn print-deps
+  [opts]
+  (read-deps (if (::verbose opts) opts (assoc opts ::verbose true))))
 
 (defn read-all-deps
   [opts]
@@ -105,6 +155,10 @@
            (map validate)
            doall))))
 
+(defn print-all-deps
+  [opts]
+  (read-all-deps (if (::verbose opts) opts (assoc opts ::verbose true))))
+
 (defmacro get-caller-classloader
   []
   `(.getClassLoader (class (proxy [Object] []))))
@@ -113,8 +167,6 @@
   ([lib] `(project-info "project-info" ~lib))
   ([op lib]
    `(when (valid-lib? ~op ~lib)
-      (or (some-> {:lib ~lib :loader (get-caller-classloader)}
-                  read-deps
-                  :project)
-          {:id "project-not-found"
-           :name (format "*Project %s not found*" ~lib)}))))
+      (some-> {:lib ~lib ::loader (get-caller-classloader)}
+              read-deps
+              :project))))

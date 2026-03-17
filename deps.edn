@@ -1,4 +1,6 @@
-{:project {:id fmjrey/project :bad :entry}
+{:project {:id fmjrey/project
+           :name "project"
+           :ignored :entry}
  :paths ["src" "resources"]
  :deps {org.clojure/clojure {:mvn/version "1.12.4"}
         org.clojure/tools.deps.edn {:mvn/version "0.9.22"}}
