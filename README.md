@@ -1,21 +1,21 @@
 # fmjrey/project
 
-Utility library to support a `:project` entry in `deps.edn`.
+Utility library to capture project info in `deps.edn`.
 
 **EXPERIMENTAL WORK IN PROGRESS**
 
 ## Rationale
 
-As the clojure cli and build tools mature and become prevalent, the feature gap
+As the clojure CLI and build tools mature and become prevalent, the feature gap
 with the previous leiningen tool is diminishing. Capturing project metadata
 such as name and version remains however unhandled, and there aren't many places
 where it can.
 
 [Tools.build](https://clojure.org/guides/tools_build) offers APIs that help
 with versioning, and thus may seem like a good place to start. Except projects
-do not necessarily need to use it, or have a file named `build.clj`.
-Also `build.clj` isn't so much about data, and more about logic, though it needs
-that data.
+do not necessarily need a build file, or have a it named `build.clj`.
+Also `build.clj` isn't so much about data, and more about logic, though it most
+likely need project data to carry its work.
 Then there is `deps.edn` which mostly deals with dependencies and does not say
 much about the dependent side (e.g. `:paths`). It could say more, the verb
 _to depend_ is transitive and requires a dependent subject and one or more
@@ -35,22 +35,63 @@ and [TDEPS-278](https://clojure.atlassian.net/browse/TDEPS-278),
 seem to point towards a future where a project `deps.edn` might be made
 available more systematically regardless of the situation.
 
-In terms of design there are some special cases to consider:
+In terms of design here are some important considerations:
 
-1. Q: If both `deps.edn` in project root and resource directory are available,
-   which one is loaded?
- 
+1. Q: Where in `deps.edn` should project info be captured?
+
+   A: For now adding data within an alias is the recommended way to add user
+   keys in `deps.edn`. The core team prefers to reserve top level keys for
+   future evolution and cannot guarantee future access to custom keys, see the
+   official documentation about this
+   [here](https://clojure.org/reference/clojure_cli#_using_aliases_for_custom_purposes).
+   That being said, the most logical place for project data would be at the
+   same level as `:paths` and `:deps` since these already capture data about
+   a project. Even with an alias, there is no guarantee its name won't
+   conflict with other user aliases. Therefore the suggestion is to use a
+   default qualified alias, say `:project/info`, and allow for it to be
+   changed via some option.
+
+2. Q: How is this data going to be merged with root and user `deps.edn`?
+
+   A: Project data shouldn't be defined elsewhere than in the project root
+   `deps.edn`. There are two different merge strategies being applied, the
+   first one being the most constraining for a project data alias:
+   - First step: combine all the different root, user, project, and extra
+     `deps.edn` into a single one using `clojure.core/merge`. In other words the
+     last entry (the most specific one on the left) replaces the previous ones
+     (the most generic one on the right), which means the last alias wins, as
+     documented [here](https://clojure.org/reference/clojure_cli#deps_sources).
+   - Second step: use that combined `deps.edn` to reduce the aliases supplied to
+     the CLI into a [runtime basis](https://clojure.org/reference/deps_edn#basis)
+     so as to build a classpath, using per-key merge rules, and as documented
+     [here](https://clojure.org/reference/clojure_cli#aliases).
+
+3. Q: Can the [runtime basis](https://clojure.org/reference/deps_edn#basis)
+   be used to retrieve project data?
+
+   A: Yes but only to retrieve the dependent project data when launched via the
+   [clojure CLI](https://clojure.org/guides/deps_and_cli). If a library used as a
+   dependency would like to report on its own data (not on the dependent project)
+   it needs to access its own `deps.edn`, which is why this file is copied as a
+   resource because most logic for building a jar do not include it by default.
+   Also there may be cases where the clojure CLI isn't used to launch a project,
+   which is likely to happen with clojure dialects that still capture data in
+   `deps.edn` but use other means to launch a project or script.
+
+4. Q: If both `deps.edn` in project root and a copy in a resource directory
+   are available, which one is loaded?
+
    A: Load from project root first, and if not found try as a resource.
-   
-2. Q: How to ensure a library is loading its own `deps.edn` and not the one
+
+5. Q: How to ensure a library is loading its own `deps.edn` and not the one
    from another library or even the dependent application?
 
    A: Store an `deps.edn` copy into the `deps/<group-id>/<artifact-id>/`
    resource directory. Search `deps.edn` first in project root then in
    the resource directory, accepting the first that matches a given
    `groupId/artifactId`.
-   
-3. Q: Can a source dependency (git or local) access its own project `deps.edn`
+
+6. Q: Can a source dependency (git or local) access its own project `deps.edn`
    from within its code?
 
    A: TBD. A dependency provided as a jar is not guaranteed to have its
@@ -64,22 +105,23 @@ In terms of design there are some special cases to consider:
    validate the most reliable way to do that.
 
 This library is therefore an experiment to use `deps.edn` as the place where
-project data is captured into a new `:project` entry. It also provides a way to
-retrieve it at runtime by copying `deps.edn` into a resource directory.
+project data is captured into a new `:project/info` alias. It also provides
+a way to retrieve it at runtime by copying `deps.edn` into a resource directory.
 The library is written in a way that should make it reasonably easy to merge with
 [tools.deps.edn](https://github.com/clojure/tools.deps.edn).
 
-## deps.edn :project entry
+## deps.edn :project/info alias
 
-The `:project` entry in `deps.edn` contains a single map of data about the
+The `:project/info` alias in `deps.edn` contains a single map of data about
 the project such as version, name, license, etc. Only the version in a project
-root should be edited directly and version controlled. The copy that is made in
-a resource directory should not be edited and preferably not checked in.
+root should be edited directly and version controlled. The copy that is made
+in a resource directory should not be edited and preferably not checked in.
 
-### :project entries
+### :project/info alias entries
 
-In `deps.edn` project related data about the dependent side should be placed
-in a map under `:project` with the following entries:
+In `deps.edn`, project related data about the dependent side should be placed
+in a map under the `:project/info` alias entry, ideally as the first one, and
+containing the following entries:
 
 - `:id`: a qualified symbol identifying the project, as expected under `:lib` by
         [write-pom](https://clojure.github.io/tools.build/clojure.tools.build.api.html#var-write-pom)
@@ -139,23 +181,37 @@ unless you have automation to always keep them up to date. However one could
 imagine the project map to be augmented at runtime with these entries in order
 to provide them to the next build step.
 
+Finally, in the rare case where a different alias name needs to be used to
+capture project info, the `:fmjrey.project/entry` option can be set to a vector
+of keys to navigate to reach the project data, just like the clojure core
+`get-in` function and similar operate. The default value for that option is:
+`:fmjrey.project/entry [:aliases :project/info]`
+
 ## Usage
 
 This library can be used in 3 different ways:
 
-1. at runtime as a library in order to read `deps.edn` wherever it may be
+1. at runtime as a library in order to read project info from `deps.edn`
+   wherever it may be
 2. within your project `build.clj` or equivalent
-3. as a clojure CLI command with the -T option
+3. as a clojure CLI command with the -T or -X options
 
 These require the following dependency declaration in your project `deps.edn`:
 
 ```clojure
 {:deps {fmjrey/project {:git/tag "TAG" :git/sha "SHA"}} ;; runtime use
- :aliases
- ;; build and CLI use
- {:build {:deps {io.github.clojure/tools.build {:git/tag "TAG" :git/sha "SHA"}
-                 fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
-          :ns-default build}}}
+ :aliases {
+   ;; easier to find as the first alias
+   :project/info {
+     :id: my.app/name
+     :license {
+       :id "EPL-2.0"
+       :name "Eclipse Public License 2.0"
+       :url "https://www.eclipse.org/legal/epl-2.0"}}
+   ;; build and CLI use
+   :build {:deps {io.github.clojure/tools.build {:git/tag "TAG" :git/sha "SHA"}
+                   fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
+           :ns-default build}}}
 ```
 
 ### Use as a runtime library
@@ -170,28 +226,42 @@ The require entry should be as follows for runtime use:
 ```
 
 The easiest way to load project data is to use the macro `project/project-info`
-in order to define a var to capture the `:project` map, .e.g:
+in order to define a var to capture the `:project/info` alias map, .e.g:
 
 ```clojure
-(def app-info (project/project-info 'my/app))
+(def app-info (project/project-info 'my.app/name))
 ```
+It searches for project data in the following order:
+1. [runtime basis](https://clojure.org/reference/deps_edn#basis)
+2. `deps.edn` first as a file and then as a resource
+3. `/deps.edn` first as a file and then as a resource
+4. `deps/<group-id>/<artifact-id>/deps.edn`  first as a resource then as a file
+5. `/deps/<group-id>/<artifact-id>/deps.edn`  first as a resource then as a file
+
+When no symbol is given as argument the last items above cannot be searched as
+the resource `deps.edn` copy is in a directory specific to each project/library.
+When a symbol is given it returns the first project data found with a matching
+id. In all cases the given option map is returned possibly augmented with a
+`:project/info` entry if a matching one is found.
+When given a `:fmjrey.project/entry` option, the last vector element provided
+by that option will be used as key to contain the resulting project data in the
+returned options map instead of `:project/info`.
 
 Alternatively you can use the following functions that take an options map
-that must have a `:lib` entry in the format `groupId/artifactId`:
+that may or may not have a `:lib` entry in the format `groupId/artifactId`.
+They apply the same search logic as explained above:
 
-- `read-project`: loads the project data from either `deps.edn` in project root
-  or its copy as a resource, whichever is found first and matches the given
-  lib symbol to make sure it finds the right `deps.edn` file. Returns the given
-  option map augmented with a `:project` entry if a matching one is found.
+- `read-project`: returns the given option map augmented with a `:project/info`
+  entry if found.
 - `searched-deps`: list all `deps.edn` files or resource files checked
   for a matching project entry. This is mostly for experimentation and testing
   so as to check the different combinations of paths, files, and resources that
   are checked. Returns a sequence of options maps augmented with various
-  working keys and a `:project` entry when a matching id is found.
+  working keys and a `:project/info` entry when a matching id is found.
 
 For experimentation `print-project` and `print-searched-deps` offer exactly
-the same functionality as their above counterparts, except they print the
-files or resources that have been searched for a matching project entry.
+the same functionality as their above counterparts, except they print where
+a matching project entry has been searched for.
 To also print the matching project entries add `:fmjrey.project/verbose :very`
 to the options map. Printing is in fact controlled by this option which is set
 to `true` by the printing functions (unless `:very` is passed).
