@@ -15,12 +15,12 @@
   "Tools for REPL Driven Development"
   (:require
    ;; REPL Workflow
-   [mulog-events]                      ; Event Logging
-   [com.brunobonacci.mulog :as mulog]  ; Global context & Tap publisher
+   [fmjrey.project]
+   [mulog-events]                     ; Event Logging
+   [com.brunobonacci.mulog :as mulog] ; Global context & Tap publisher
    [portal]
-   [portal.api :as inspect]                          ; Data inspector
-   [clojure.tools.namespace.repl :as namespace]
-   [fmjrey.project :as project]))
+   [portal.api :as inspect] ; Data inspector
+   [clojure.tools.namespace.repl :as namespace]))
 
 ;; ---------------------------------------------------------
 ;; Help
@@ -113,19 +113,19 @@
 ; Make sure the portal window is opened before these
 
   (do (inspect/clear) (namespace/refresh)
-      (let [opts (project/searched-deps {:lib 'fmjrey/project
-                                         :fmjrey.project/verbose :very})]
+      (let [opts (fmjrey.project/searched-deps {:lib 'fmjrey/project
+                                                :fmjrey.project/verbose :very})]
         (mulog/log ::searched-deps :opts opts)
         opts))
 
   (do (inspect/clear) (namespace/refresh)
-      (let [opts (project/read-project {:lib 'fmjrey/project
-                                     :fmjrey.project/verbose :very})]
+      (let [opts (fmjrey.project/read-project {:lib 'fmjrey/project
+                                               :fmjrey.project/verbose :very})]
         (mulog/log ::read-project :opts opts)
         opts))
 
   (do (inspect/clear) (namespace/refresh)
-      (project/project-info 'fmjrey/project))
+      (fmjrey.project/project-info 'fmjrey/project))
 
   #_()) ; End of rich comment
 
