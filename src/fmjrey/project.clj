@@ -4,6 +4,7 @@
   (:require [clojure.string :as str]
             [clojure.pprint :as pp]
             [clojure.java.io :as io]
+            [clojure.java.basis :as basis]
             [clojure.tools.deps.edn :as deps]
             [fmjrey.project.specs :as specs]))
 
@@ -104,7 +105,9 @@
                                           (assoc  ::file-or-res
                                                   (io/resource path)))]
                                loader (conj (assoc o ::file-or-res
-                                                   (io/resource path loader)))))))))
+                                                   (io/resource path loader)))))))
+       (concat [(-> opts (dissoc ::loader) (assoc ::type :current-basis))
+                (-> opts (dissoc ::loader) (assoc ::type :initial-basis))])))
 
 (defn- print-opts
   [{:keys [lib ::path ::type ::file-or-res ::verbose ::loader ::alias]
@@ -113,6 +116,7 @@
   (let [project (get opts alias)
         match? (and project (or (nil? lib) (= (:id project) lib)))
         print-project? (and match? (= :very verbose))
+        basis? (#{:current-basis :initial-basis} type)
         msg (as-> (StringBuilder.) $
               (.append $ "  ")
               (.append $ (-> type name str/capitalize))
@@ -121,13 +125,15 @@
                 path (.append path))
               (.append $ ", ")
               (cond-> $
-                loader (.append "with classloader, ")
+                loader (.append "with caller classloader, ")
                 file-or-res (.append "found and readable")
-                (not file-or-res) (.append "not found or readable")
+                (not (or file-or-res basis?)) (.append "not found or readable")
+                (and basis? (not match?)) (.append "not found")
                 ;;
                 )
               (if match?
                 (cond-> $
+                  basis? (.append "found")
                   lib (.append ", matching id")
                   (nil? lib) (.append ", found id ")
                   (nil? lib) (.append (:id project)))
@@ -154,17 +160,23 @@
     (flush)
     opts))
 
+(defn read-basis
+  [alias basis]
+  (get-in basis [:aliases alias]))
+
 (defn read-edn
-  [{:keys [::file-or-res ::verbose ::alias]
+  [{:keys [::type ::file-or-res ::verbose ::alias]
     :or {alias default-alias}
     :as opts}]
-  (let [opts (or (when file-or-res
-                   (with-open [rdr (io/reader file-or-res)]
-                     (when-let [p (some-> rdr
-                                          (deps/read-edn opts)
-                                          (get-in [:aliases alias]))]
-                       (assoc opts alias p))))
-                 opts)]
+  (let [edn (case type
+              (:file :resource) (when file-or-res
+                                  (with-open [rdr (io/reader file-or-res)]
+                                    (deps/read-edn rdr opts)))
+              :current-basis (basis/current-basis)
+              :initial-basis (basis/initial-basis))
+        project (get-in edn [:aliases alias])
+        opts (cond-> opts
+               project (assoc alias project))]
     (if verbose
       (print-opts opts)
       opts)))
@@ -175,8 +187,8 @@
     :as opts}]
   (when verbose
     (if lib
-      (println "Searching for id" (str lib) "in" alias)
-      (println "Searching for project info in" alias)))
+      (println "Searching for id" (str lib) "in alias" alias)
+      (println "Searching for project info in alias" alias)))
   opts)
 
 (defn- print-summary
@@ -194,14 +206,14 @@
               (print "Found" count "matching deps.edn with id" lib)
               (print "Found" count "matching deps.edn with" alias))
             (when (= :very verbose)
-              (print ":")
+              (print " in:")
               (doseq [{:keys [::type ::path ::loader]} opts-list]
                 (println)
                 (print "  ")
                 (if path
                   (do (print path "(as" (name type))
                       (when (and loader (= :resource type))
-                        (print "with classloader"))
+                        (print "with caller classloader"))
                       (print ")"))
                   (print (name type)))))))
       (newline)))

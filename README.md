@@ -231,12 +231,14 @@ in order to define a var to capture the `:project/info` alias map, .e.g:
 (def app-info (project/project-info 'my.app/name))
 ```
 It searches for project data in the following order:
-1. [runtime basis](https://clojure.org/reference/deps_edn#basis) (TODO)
-2. `deps.edn` first as a file and then as a resource
-3. `/deps.edn` first as a file and then as a resource
-4. `deps/<group-id>/<artifact-id>/deps.edn`  first as a resource then as a file
-5. `/deps/<group-id>/<artifact-id>/deps.edn`  first as a resource then as a file
+1. [current and initial basis](https://clojure.org/reference/deps_edn#basis)
+2. `deps.edn` as a file then as a resource
+3. `/deps.edn` as a file then as a resource
+4. `deps/<group-id>/<artifact-id>/deps.edn` as a resource then as a file
+5. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource then as a file
 
+The `project-info` macro also tries to load each resource without specifying any
+classloader, and then with the caller classloader.
 When no symbol is given as argument it searches project data for the running
 application following the above list except the last two items. When a symbol is
 given it returns the first project data found with a matching `:id`.
@@ -300,6 +302,19 @@ clojure -T:build fmjrey.project.build/copy-deps :lib myorg/mylib
 # read project deps.edn
 clojure -T:build fmjrey.project.build/read-project :lib myorg/mylib
 ```
+
+### Options
+
+All API entry points can take an options map with the following optional entries:
+
+- `:lib`: a qualified symbol identifying the project, as expected under by
+        [write-pom](https://clojure.github.io/tools.build/clojure.tools.build.api.html#var-write-pom)
+        and similar to the name defined with `defproject` in leiningen.
+- `:fmjrey.project/alias`: the alias name in which project info is captured,
+  defaults to `:project/info`.
+- `:fmjrey.project/verbose`: when true the progression of the search is printed,
+    and when set to `:very` it also prints the matching project entries.
+- `:fmjrey.project/loader`: the classloader to also use for loading resources.
 
 ## Development (TODO)
 
