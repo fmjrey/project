@@ -3,6 +3,7 @@
 
 (s/def ::lib (s/and symbol? qualified-ident?))
 (s/def ::id symbol?)
+(s/def ::alias keyword?)
 (s/def ::description string?)
 (s/def ::url string?)
 (s/def ::version-string string?)
@@ -35,6 +36,10 @@
 (defn valid-lib?
   [lib]
   (s/valid? ::lib lib))
+
+(defn valid-alias?
+  [alias]
+  (s/valid? ::alias alias))
 
 (defn valid-project?
   "True if given map is a valid :project entry according to the specs"

@@ -18,7 +18,7 @@
    [fmjrey.project]
    [mulog-events]                     ; Event Logging
    [com.brunobonacci.mulog :as mulog] ; Global context & Tap publisher
-   [portal]
+   ;;[portal]
    [portal.api :as inspect] ; Data inspector
    [clojure.tools.namespace.repl :as namespace]))
 
@@ -110,22 +110,46 @@
 
   (mulog-events/stop)            ; stop publishing log events
 
-; Make sure the portal window is opened before these
-
-  (do (inspect/clear) (namespace/refresh)
-      (let [opts (fmjrey.project/searched-deps {:lib 'fmjrey/project
-                                                :fmjrey.project/verbose :very})]
-        (mulog/log ::searched-deps :opts opts)
-        opts))
-
-  (do (inspect/clear) (namespace/refresh)
-      (let [opts (fmjrey.project/read-project {:lib 'fmjrey/project
-                                               :fmjrey.project/verbose :very})]
-        (mulog/log ::read-project :opts opts)
-        opts))
+  ;; Project
 
   (do (inspect/clear) (namespace/refresh)
       (fmjrey.project/project-info 'fmjrey/project))
+
+  (do (inspect/clear) (namespace/refresh)
+      (some-> {:lib 'fmjrey/project
+               ;;:fmjrey.project/verbose :very
+               ;;:fmjrey.project/alias :myapp/info
+               ;;:fmjrey.project/loader (fmjrey.project/caller-classloader)
+               ;;
+               }
+              fmjrey.project/project-info))
+
+  (do (inspect/clear) (namespace/refresh)
+      (-> {:lib 'fmjrey/project
+           ;;:fmjrey.project/verbose :very
+           ;;:fmjrey.project/alias :myapp/info
+           ;;:fmjrey.project/loader (fmjrey.project/caller-classloader)
+           ;;
+           }
+          fmjrey.project/read-project))
+
+  (do (inspect/clear) (namespace/refresh)
+      (some-> {:lib 'fmjrey/project
+               ;;:fmjrey.project/verbose :very
+               ;;:fmjrey.project/alias :myapp/info
+               ;;:fmjrey.project/loader (fmjrey.project/caller-classloader)
+               ;;
+               }
+              fmjrey.project/read-project))
+
+  (do (inspect/clear) (namespace/refresh)
+      (-> {:lib 'fmjrey/project
+           ;;:fmjrey.project/verbose :very
+           ;;:fmjrey.project/alias :myapp/info
+           ;;:fmjrey.project/loader (fmjrey.project/caller-classloader)
+           ;;
+           }
+          fmjrey.project/searched-deps))
 
   #_()) ; End of rich comment
 

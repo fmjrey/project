@@ -86,7 +86,7 @@ In terms of design here are some important considerations:
 5. Q: How to ensure a library is loading its own `deps.edn` and not the one
    from another library or even the dependent application?
 
-   A: Store an `deps.edn` copy into the `deps/<group-id>/<artifact-id>/`
+   A: Copy the `deps.edn` file into the `deps/<group-id>/<artifact-id>/`
    resource directory. Search `deps.edn` first in project root then in
    the resource directory, accepting the first that matches a given
    `groupId/artifactId`.
@@ -182,10 +182,8 @@ imagine the project map to be augmented at runtime with these entries in order
 to provide them to the next build step.
 
 Finally, in the rare case where a different alias name needs to be used to
-capture project info, the `:fmjrey.project/entry` option can be set to a vector
-of keys to navigate to reach the project data, just like the clojure core
-`get-in` function and similar operate. The default value for that option is:
-`:fmjrey.project/entry [:aliases :project/info]`
+capture project info, the `:fmjrey.project/alias` option can be set to the alias
+keyword where to find project data, which defaults to `:project/info`.
 
 ## Usage
 
@@ -204,6 +202,7 @@ These require the following dependency declaration in your project `deps.edn`:
    ;; easier to find as the first alias
    :project/info {
      :id: my.app/name
+     :name "my app name"
      :license {
        :id "EPL-2.0"
        :name "Eclipse Public License 2.0"
@@ -232,20 +231,22 @@ in order to define a var to capture the `:project/info` alias map, .e.g:
 (def app-info (project/project-info 'my.app/name))
 ```
 It searches for project data in the following order:
-1. [runtime basis](https://clojure.org/reference/deps_edn#basis)
+1. [runtime basis](https://clojure.org/reference/deps_edn#basis) (TODO)
 2. `deps.edn` first as a file and then as a resource
 3. `/deps.edn` first as a file and then as a resource
 4. `deps/<group-id>/<artifact-id>/deps.edn`  first as a resource then as a file
 5. `/deps/<group-id>/<artifact-id>/deps.edn`  first as a resource then as a file
 
-When no symbol is given as argument the last items above cannot be searched as
-the resource `deps.edn` copy is in a directory specific to each project/library.
-When a symbol is given it returns the first project data found with a matching
-id. In all cases the given option map is returned possibly augmented with a
+When no symbol is given as argument it searches project data for the running
+application following the above list except the last two items. When a symbol is
+given it returns the first project data found with a matching `:id`.
+An options map can also be passed following the same requirements as the
+`fmjrey.project/read-project` function (see below).
+In all cases the given option map is returned possibly augmented with a
 `:project/info` entry if a matching one is found.
-When given a `:fmjrey.project/entry` option, the last vector element provided
-by that option will be used as key to contain the resulting project data in the
-returned options map instead of `:project/info`.
+When given a `:fmjrey.project/alias` option, its value is used as the key for
+storing the matching project data in the returned options map instead of the
+default `:project/info`.
 
 Alternatively you can use the following functions that take an options map
 that may or may not have a `:lib` entry in the format `groupId/artifactId`.
