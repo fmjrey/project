@@ -46,13 +46,25 @@
 
 (def default-alias :project/info)
 
+(defn valid-search-in?
+  ([op search-in] (valid-search-in? op search-in {}))
+  ([op search-in opts]
+   (or (specs/valid-search-in? search-in)
+       (throw
+        (ex-info
+         (format "Invalid search-in in %s: got %s, expected one of, or a vector of #{:basis :project :resource}"
+                 op search-in)
+         opts)))))
+
 (defn valid-opts?
-  [op {:keys [lib ::alias]
-         :as opts}]
+  [op {:keys [lib ::alias ::search-in]
+       :as opts}]
   (or (nil? lib)
       (valid-lib? op lib opts))
   (or (nil? alias)
       (valid-alias? op alias opts))
+  (or (nil? search-in)
+      (valid-search-in? op search-in opts))
   (cond-> opts
     (nil? alias) (assoc ::alias default-alias)))
 
@@ -317,8 +329,7 @@
 (defmacro project-info
   ([] `(project-info {}))
   ([lib-or-opts]
-   `(let [{ ;:keys [lib# ::loader# ::alias#]
-           lib# :lib alias# ::alias loader# ::loader
+   `(let [{lib# :lib alias# ::alias loader# ::loader
            :or {alias# default-alias}
            :as opts#} (cond
            (map? ~lib-or-opts)

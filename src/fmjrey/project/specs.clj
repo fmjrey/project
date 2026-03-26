@@ -1,9 +1,21 @@
 (ns fmjrey.project.specs
   (:require [clojure.spec.alpha :as s]))
 
+;; Options
 (s/def ::lib (s/and symbol? qualified-ident?))
-(s/def ::id symbol?)
 (s/def ::alias keyword?)
+(def search-in-keyword? #{:basis :project :resource})
+(s/def ::search-in
+  (s/or ::keyword search-in-keyword?
+        ::vector (s/coll-of search-in-keyword?
+                            :kind vector?
+                            :min-count 1
+                            :max-count 3
+                            :distinct true
+                            :into [])))
+
+;; Project data
+(s/def ::id symbol?)
 (s/def ::description string?)
 (s/def ::url string?)
 (s/def ::version-string string?)
@@ -41,6 +53,10 @@
   [alias]
   (s/valid? ::alias alias))
 
+(defn valid-search-in?
+  [search-in]
+  (s/valid? ::search-in search-in))
+
 (defn valid-project?
   "True if given map is a valid :project entry according to the specs"
   [project-map]
@@ -56,5 +72,5 @@
       (let [problems (->> (::s/problems err-data)
                           (sort-by #(- (count (:in %))))
                           (sort-by #(- (count (:path %)))))
-            {:keys [path pred val reason via in]} (first problems)]
+            {:keys [pred val reason in]} (first problems)]
         (str "Found: " (pr-str val) ", expected: " (if reason reason (s/abbrev pred)) ", in: " (pr-str in))))))
