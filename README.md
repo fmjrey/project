@@ -194,6 +194,11 @@ This library can be used in 3 different ways:
 2. within your project `build.clj` or equivalent
 3. as a clojure CLI command with the -T or -X options
 
+At runtime there is no need to load the clojure build API, which is only really
+needed for copying the `deps.edn` file to the resource directory. Therefore two
+separate namespaces are offered, `fmjrey.project` for runtime use, and
+`fmjrey.project.build` for build and CLI usage, which refers to some functions
+in the first for convenience.
 These require the following dependency declaration in your project `deps.edn`:
 
 ```clojure
@@ -209,7 +214,7 @@ These require the following dependency declaration in your project `deps.edn`:
        :url "https://www.eclipse.org/legal/epl-2.0"}}
    ;; build and CLI use
    :build {:deps {io.github.clojure/tools.build {:git/tag "TAG" :git/sha "SHA"}
-                   fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
+                  fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
            :ns-default build}}}
 ```
 
@@ -217,12 +222,17 @@ These require the following dependency declaration in your project `deps.edn`:
 
 Having access to project data can be useful for printing or logging information
 at runtime, e.g. a header string containing name and version upon startup.
+Most situations will only need the `project-info` macro to retrieve a project
+info. Additional functions are provided for more customized behavior and
+experimentation.
 
-The require entry should be as follows for runtime use:
+In all cases the require entry should be as follows for runtime use:
 
 ```clojure
 [fmjrey.project :as project]
 ```
+
+#### Runtime `project-info` macro
 
 The easiest way to load project data is to use the macro `project/project-info`
 in order to define a var to capture the `:project/info` alias map, .e.g:
@@ -230,32 +240,72 @@ in order to define a var to capture the `:project/info` alias map, .e.g:
 ```clojure
 (def app-info (project/project-info 'my.app/name))
 ```
-It searches for project data in the following order:
+By default project data is searched in the following locations in that order:
+
 1. [current and initial basis](https://clojure.org/reference/deps_edn#basis)
-2. `deps.edn` as a file then as a resource
-3. `/deps.edn` as a file then as a resource
-4. `deps/<group-id>/<artifact-id>/deps.edn` as a resource then as a file
-5. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource then as a file
+2. Custom `deps.edn` location as per the runtime current basis, if available.
+   That is, a file path is created with the `:dir` and/or `project` entries from
+   `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config))
+   and is loaded as file then as a resource
+3. `deps.edn` as a file then as a resource
+4. `/deps.edn` as a resource
+5. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
+6. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
 
-The `project-info` macro also tries to load each resource without specifying any
-classloader, and then with the caller classloader.
-When no symbol is given as argument it searches project data for the running
-application following the above list except the last two items. When a symbol is
-given it returns the first project data found with a matching `:id`.
-An options map can also be passed following the same requirements as the
-`fmjrey.project/read-project` function (see below).
-In all cases the given option map is returned possibly augmented with a
-`:project/info` entry if a matching one is found.
-When given a `:fmjrey.project/alias` option, its value is used as the key for
-storing the matching project data in the returned options map instead of the
-default `:project/info`.
+The search logic stops and returns the first project data found with an `:id`
+matching the symbol given as single argument, or given under the `:lib` entry
+within an options map also passed as single argument:
 
-Alternatively you can use the following functions that take an options map
-that may or may not have a `:lib` entry in the format `groupId/artifactId`.
-They apply the same search logic as explained above:
+```clojure
+(def app-info (project/project-info {:lib 'my.app/name}))
+```
+To change the searched locations and their order set an option
+`:fmjrey.project/search-in` to one of, or a vector of:
+
+- `:basis`: this corresponds to item 1 above
+- `:project`: this corresponds to items 2 to 4 above
+- `:resource`: this corresponds to items 5 and 6 above
+
+The default for `:fmjrey.project/search-in` is `[:basis :project :resource]`,
+meaning the above examples are equivalent to:
+
+```clojure
+(def app-info
+  (project/project-info {:lib 'my.app/name
+                         :fmjrey.project/search-in [:basis :project :resource]}))
+```
+To search only in the runtime basis:
+
+```clojure
+(def app-info
+  (project/project-info {:lib 'my.app/name
+                         :fmjrey.project/search-in :basis}))
+```
+
+When no symbol is given to `project-info` it can only search project data for the
+running application in its runtime basis and project root directory and not in
+the project specific resource directory, as if `:fmjrey.project/search-in` was
+set to `[:basis :project]`. It will also  return the first project data found
+regardless of its `:id`. For a more deterministic outcome it is best to provide
+a symbol argument, and certainly necessary in the case of a library code wishing
+to load its own project data instead of the dependent project data.
+
+The search logic also tries to load a resource without specifying any
+classloader, and then tries with an optional classloader if given with the
+`:fmjrey.project/loader` option. The `project-info` macro adds the caller
+classloader automatically, if not already provided, while other non-macro API
+calls detailed below don't.
+
+#### Runtime functions
+
+In addition to the `project-info` macro the following functions take an options
+map that may or may not have a `:lib` entry in the format `groupId/artifactId`.
+They apply the same search logic as explained above for the macro, and return
+the given option map possibly augmented with a `:project/info` entry if a
+matching one is found.
 
 - `read-project`: returns the given option map augmented with a `:project/info`
-  entry if found.
+  entry if found, and stripped from all keys qualified with `fmjrey.project`.
 - `searched-deps`: list all `deps.edn` files or resource files checked
   for a matching project entry. This is mostly for experimentation and testing
   so as to check the different combinations of paths, files, and resources that
@@ -263,11 +313,14 @@ They apply the same search logic as explained above:
   working keys and a `:project/info` entry when a matching id is found.
 
 For experimentation `print-project` and `print-searched-deps` offer exactly
-the same functionality as their above counterparts, except they print where
-a matching project entry has been searched for.
+the same functionality as their above counterparts, except they print the
+locations where a matching project entry has been searched for.
 To also print the matching project entries add `:fmjrey.project/verbose :very`
 to the options map. Printing is in fact controlled by this option which is set
 to `true` by the printing functions (unless `:very` is passed).
+
+A list of all possible options is detailed in the [Options](#options) section
+below.
 
 ### Use within build.clj
 
@@ -277,8 +330,7 @@ versioning and release.
 The require entry should be as follows:
 
 ```clojure
-[fmjrey.project :as project]  ;; 
-[fmjrey.project.build :as bp] ;; this is where the copy task is defined
+[fmjrey.project.build :as project]
 ```
 
 The following task function are provided, each taking an options map as single
@@ -289,7 +341,7 @@ They return that hash map unchanged unless otherwise stated.
   Options map must have a `:lib` entry in the format `groupId/artifactId`.
   Return the options map unchanged. (TODO)
 - `read-project`, `searched-deps`, and their printing alternate: same as the
-  runtime functions.
+  runtime functions, no need to require `fmjrey.project`.
 
 ### Use from clojure CLI
 
@@ -301,17 +353,28 @@ CLI with the -T option:
 clojure -T:build fmjrey.project.build/copy-deps :lib myorg/mylib
 # read project deps.edn
 clojure -T:build fmjrey.project.build/read-project :lib myorg/mylib
+# list all searched locations
+clojure -T:build fmjrey.project.build/searched-deps :lib myorg/mylib
 ```
 
 ### Options
 
 All API entry points can take an options map with the following optional entries:
 
-- `:lib`: a qualified symbol identifying the project, as expected under by
-        [write-pom](https://clojure.github.io/tools.build/clojure.tools.build.api.html#var-write-pom)
-        and similar to the name defined with `defproject` in leiningen.
-- `:fmjrey.project/alias`: the alias name in which project info is captured,
-  defaults to `:project/info`.
+- `:lib`: a qualified symbol identifying the project, in the format
+  `groupId/artifactId` as expected under `:lib` by
+  [write-pom](https://clojure.github.io/tools.build/clojure.tools.build.api.html#var-write-pom).
+- `:fmjrey.project/search-in`: specifies the locations, and in which order, where
+  to search for project info, which can be one of, or a vector of:
+  
+  - `:basis`: [current and initial basis](https://clojure.org/reference/deps_edn#basis)
+  - `:project`: the project root
+  - `:resource`: the resource directory
+  
+  Default to `[:basis :project :resource]`.
+- `:fmjrey.project/alias`: the alias name under which project info is captured,
+  which is also used as the key for storing the matching project data in the
+  returned options map instead of the default `:project/info`.
 - `:fmjrey.project/verbose`: when true the progression of the search is printed,
     and when set to `:very` it also prints the matching project entries.
 - `:fmjrey.project/loader`: the classloader to also use for loading resources.

@@ -5,3 +5,6 @@ All notable changes to this project will be documented in this file. This change
 ### Added
 - First cut implementation using tools.deps.edn
 - Added printing and alternate printing functions controlled via options
+- Added edn loading from current and initial basis
+- Added use of custom project root and edn file from runtime basis
+- Added ::search-in option

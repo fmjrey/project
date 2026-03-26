@@ -82,19 +82,62 @@
        (interpose File/separator)
        (apply str)))
 
-(defn expand-opts
-  [{:keys [lib ::loader] :as opts}]
-  (->> (cond-> [(assoc opts ::type :file ::path "deps.edn")]
-         lib (conj (assoc opts ::type :resource ::path (resource-filename lib))))
-       ;; expand with leading /
-       (mapcat (fn [{path ::path :as o}]
-                 [o (assoc o ::path (str File/separator path))]))
-       ;; expand file to resource and vice-versa
+(defn- start-opts
+  [{:keys [lib ::search-in ::verbose]
+    :or {search-in [:basis :project :resource]}
+    :as opts}]
+  (let [search-in (if (keyword? search-in) [search-in] search-in)]
+    (reduce
+     (fn [r k]
+       (let [nocl (dissoc opts ::loader)
+             basis (basis/current-basis)
+             custd (get-in basis [:basis-config :dir])
+             custp (get-in basis [:basis-config :project] :standard)
+             custd? (and (string? custd)
+                         (not (re-matches #"^(?:\.[/\\]?)?$" custd)))
+             custp? (and (string? custp)
+                         (not (re-matches #"^(?:\.?[/\\])?deps\.edn$" custp)))]
+         (when verbose
+           (when custd?
+             (println "Found custom project path in current basis:" custd))
+           (when custp?
+             (println "Found custom edn path in current basis:" custp)))
+         (case k
+           :basis
+           (cond-> r
+             true         (conj (assoc nocl ::type :current-basis))
+             true         (conj (assoc nocl ::type :initial-basis))
+             (map? custp) (conj (assoc nocl ::type :edn ::edn custp)))
+           :project
+           (cond-> r
+             (and custd? custp?)
+             (conj (assoc nocl ::type :file ::path (str (io/file custd custp))))
+             (and (not custd?) custp?)
+             (conj (assoc nocl ::type :file ::path custp))
+             (and custd? (not custp?))
+             (conj (assoc nocl ::type :file ::path (str (io/file custd
+                                                                 "deps.edn"))))
+             true (conj (assoc nocl ::type :file     ::path "deps.edn")))
+           :resource
+           (cond-> r
+             lib (conj (assoc opts ::type :resource
+                                ::path (resource-filename lib)))))))
+     [] search-in)))
+
+(defn- expand-opts
+  [{:keys [::loader] :as opts}]
+  (->> (start-opts opts)
+       ;; expand file to resource
        (mapcat (fn [{type ::type :as o}]
-                 (case type
-                   :file     [o (assoc o ::type :resource)]
-                   :resource [o (assoc o ::type :file)])))
-       ;; add :file-or-res and expand with optional :loader if provided
+                 (if (= :file type)
+                   [o (assoc o ::type :resource)]
+                   [o])))
+       ;; expand resources with leading / or \
+       (mapcat (fn [{:keys [::type  ::path] :as o}]
+                 (if (and path (= type :resource))
+                   [o (assoc o ::path (str File/separator path))]
+                   [o])))
+       ;; add :file-or-res and expand with optional classloader if provided
        (mapcat (fn [{:keys [::path ::type] :as o}]
                  (case type
                    :file     [(-> o
@@ -105,9 +148,8 @@
                                           (assoc  ::file-or-res
                                                   (io/resource path)))]
                                loader (conj (assoc o ::file-or-res
-                                                   (io/resource path loader)))))))
-       (concat [(-> opts (dissoc ::loader) (assoc ::type :current-basis))
-                (-> opts (dissoc ::loader) (assoc ::type :initial-basis))])))
+                                                   (io/resource path loader))))
+                   [o])))))
 
 (defn- print-opts
   [{:keys [lib ::path ::type ::file-or-res ::verbose ::loader ::alias]
@@ -160,22 +202,21 @@
     (flush)
     opts))
 
-(defn read-basis
-  [alias basis]
-  (get-in basis [:aliases alias]))
-
 (defn read-edn
-  [{:keys [::type ::file-or-res ::verbose ::alias]
+  [{:keys [::type ::file-or-res ::verbose ::alias ::edn]
     :or {alias default-alias}
     :as opts}]
   (let [edn (case type
+              :edn edn
               (:file :resource) (when file-or-res
                                   (with-open [rdr (io/reader file-or-res)]
                                     (deps/read-edn rdr opts)))
               :current-basis (basis/current-basis)
-              :initial-basis (basis/initial-basis))
+              :initial-basis (basis/initial-basis)
+              (throw (ex-info (str "Invalid type " type) opts)))
         project (get-in edn [:aliases alias])
         opts (cond-> opts
+               ;;edn (assoc ::edn edn)
                project (assoc alias project))]
     (if verbose
       (print-opts opts)
@@ -269,14 +310,18 @@
   `(.getClassLoader (class (proxy [Object] []))))
 
 (defmacro project-info
-  ([lib-or-opts] `(project-info "project-info" ~lib-or-opts))
-  ([op lib-or-opts]
-   `(let [lib# (if (map? ~lib-or-opts)
-                 (:lib ~lib-or-opts)
-                 ~lib-or-opts)
-          opts# (if (map? ~lib-or-opts)
-                  (assoc ~lib-or-opts ::loader (caller-classloader))
-                  {:lib lib# ::loader (caller-classloader)})
-          alias# (or (::alias opts#) default-alias)]
-      (when (or (nil? lib#) (valid-lib? ~op lib#))
-        (some-> opts# read-project alias#)))))
+  ([] `(project-info {}))
+  ([lib-or-opts]
+   `(let [{ ;:keys [lib# ::loader# ::alias#]
+           lib# :lib alias# ::alias loader# ::loader
+           :or {alias# default-alias}
+           :as opts#} (cond
+           (map? ~lib-or-opts)
+           ~lib-or-opts
+           (nil? ~lib-or-opts)
+           {}
+           (valid-lib? "project-info" ~lib-or-opts)
+           {:lib ~lib-or-opts})]
+      (cond-> opts# ;;(if (map? ~lib-or-opts) ~lib-or-opts {})
+        (nil? loader#) (assoc ::loader (caller-classloader))
+        true (some-> read-project alias#)))))

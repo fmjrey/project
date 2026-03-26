@@ -15,7 +15,7 @@
   "Tools for REPL Driven Development"
   (:require
    ;; REPL Workflow
-   [fmjrey.project]
+   [fmjrey.project :as project]
    [mulog-events]                     ; Event Logging
    [com.brunobonacci.mulog :as mulog] ; Global context & Tap publisher
    ;;[portal]
@@ -113,43 +113,62 @@
   ;; Project
 
   (do (inspect/clear) (namespace/refresh)
-      (fmjrey.project/project-info 'fmjrey/project))
+      (project/project-info 'fmjrey/project))
 
   (do (inspect/clear) (namespace/refresh)
       (some-> {:lib 'fmjrey/project
-               ;;:fmjrey.project/verbose :very
-               ;;:fmjrey.project/alias :myapp/info
-               ;;:fmjrey.project/loader (fmjrey.project/caller-classloader)
+               ::project/verbose :very
+               ;;::project/alias :myapp/info
+               ;;::project/loader (fmjrey.project/caller-classloader)
                ;;
                }
               fmjrey.project/project-info))
 
   (do (inspect/clear) (namespace/refresh)
-      (-> {:lib 'fmjrey/project
-           ;;:fmjrey.project/verbose :very
-           ;;:fmjrey.project/alias :myapp/info
-           ;;:fmjrey.project/loader (fmjrey.project/caller-classloader)
-           ;;
-           }
-          fmjrey.project/read-project))
+      (macroexpand-1
+       '(fmjrey.project/project-info
+         {:lib 'fmjrey/project
+          ::project/verbose :very
+          ;;::project/alias :myapp/info
+          ;;::project/loader (fmjrey.project/caller-classloader)
+          ;;
+          })))
 
   (do (inspect/clear) (namespace/refresh)
       (some-> {:lib 'fmjrey/project
-               ;;:fmjrey.project/verbose :very
-               ;;:fmjrey.project/alias :myapp/info
-               ;;:fmjrey.project/loader (fmjrey.project/caller-classloader)
+               ;;::project/verbose :very
+               ;;::project/alias :myapp/info
+               ;;::project/loader (project/caller-classloader)
                ;;
                }
-              fmjrey.project/read-project))
+              project/project-info))
 
   (do (inspect/clear) (namespace/refresh)
       (-> {:lib 'fmjrey/project
-           ;;:fmjrey.project/verbose :very
-           ;;:fmjrey.project/alias :myapp/info
-           ;;:fmjrey.project/loader (fmjrey.project/caller-classloader)
+           ;;::project/verbose :very
+           ;;::project/alias :myapp/info
+           ;;::project/loader (project/caller-classloader)
            ;;
            }
-          fmjrey.project/searched-deps))
+          project/read-project))
+
+  (do (inspect/clear) (namespace/refresh)
+      (some-> {:lib 'fmjrey/project
+               ;;::project/verbose :very
+               ;;::project/alias :myapp/info
+               ;;::project/loader (project/caller-classloader)
+               ;;
+               }
+              project/read-project))
+
+  (do (inspect/clear) (namespace/refresh)
+      (-> {:lib 'fmjrey/project
+           ;;::project/verbose :very
+           ;;::project/alias :myapp/info
+           ;;::project/loader (project/caller-classloader)
+           ;;
+           }
+          project/searched-deps))
 
   #_()) ; End of rich comment
 
