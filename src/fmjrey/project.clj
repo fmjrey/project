@@ -149,7 +149,12 @@
                                                   (io/resource path)))]
                                loader (conj (assoc o ::file-or-res
                                                    (io/resource path loader))))
-                   [o])))))
+                   [o])))
+       ;; throw if nothing to do
+       (#(if (seq %)
+           %
+           (throw (ex-info "Nothing to do, possible causes: ::search-in is empty or set to :resource without a :lib entry" opts))))
+       ))
 
 (defn- print-opts
   [{:keys [lib ::path ::type ::file-or-res ::verbose ::loader ::alias]

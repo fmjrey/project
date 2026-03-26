@@ -240,18 +240,9 @@ in order to define a var to capture the `:project/info` alias map, .e.g:
 ```clojure
 (def app-info (project/project-info 'my.app/name))
 ```
-By default project data is searched in the following locations in that order:
 
-1. [current and initial basis](https://clojure.org/reference/deps_edn#basis)
-2. Custom `deps.edn` location as per the runtime current basis, if available.
-   That is, a file path is created with the `:dir` and/or `project` entries from
-   `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config))
-   and is loaded as file then as a resource
-3. `deps.edn` as a file then as a resource
-4. `/deps.edn` as a resource
-5. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
-6. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
-
+The locations where project data is searched for are detailed in the
+[Search locations](search-locations) section below.
 The search logic stops and returns the first project data found with an `:id`
 matching the symbol given as single argument, or given under the `:lib` entry
 within an options map also passed as single argument:
@@ -259,42 +250,21 @@ within an options map also passed as single argument:
 ```clojure
 (def app-info (project/project-info {:lib 'my.app/name}))
 ```
-To change the searched locations and their order set an option
-`:fmjrey.project/search-in` to one of, or a vector of:
-
-- `:basis`: this corresponds to item 1 above
-- `:project`: this corresponds to items 2 to 4 above
-- `:resource`: this corresponds to items 5 and 6 above
-
-The default for `:fmjrey.project/search-in` is `[:basis :project :resource]`,
-meaning the above examples are equivalent to:
-
-```clojure
-(def app-info
-  (project/project-info {:lib 'my.app/name
-                         :fmjrey.project/search-in [:basis :project :resource]}))
-```
-To search only in the runtime basis:
-
-```clojure
-(def app-info
-  (project/project-info {:lib 'my.app/name
-                         :fmjrey.project/search-in :basis}))
-```
-
 When no symbol is given to `project-info` it can only search project data for the
 running application in its runtime basis and project root directory and not in
-the project specific resource directory, as if `:fmjrey.project/search-in` was
-set to `[:basis :project]`. It will also  return the first project data found
-regardless of its `:id`. For a more deterministic outcome it is best to provide
-a symbol argument, and certainly necessary in the case of a library code wishing
-to load its own project data instead of the dependent project data.
+the project specific resource directory. It will also  return the first project
+data found regardless of its `:id`. For a more deterministic outcome it is best
+to provide a symbol argument, and certainly necessary in the case of a library
+code wishing to load its own project data instead of the dependent project data.
 
 The search logic also tries to load a resource without specifying any
 classloader, and then tries with an optional classloader if given with the
 `:fmjrey.project/loader` option. The `project-info` macro adds the caller
 classloader automatically, if not already provided, while other non-macro API
-calls detailed below don't.
+functions detailed below don't.
+
+A list of all possible options is detailed in the [Options](#options) section
+below.
 
 #### Runtime functions
 
@@ -357,6 +327,34 @@ clojure -T:build fmjrey.project.build/read-project :lib myorg/mylib
 clojure -T:build fmjrey.project.build/searched-deps :lib myorg/mylib
 ```
 
+### Search locations
+By default project data is searched in the following locations in that order:
+
+1. [current and initial basis](https://clojure.org/reference/deps_edn#basis)
+2. Custom `deps.edn` location as per the runtime current basis, if available.
+   That is, a file path is created with the `:dir` and/or `project` entries from
+   `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config))
+   and is loaded as file then as a resource
+3. `deps.edn` as a file then as a resource
+4. `/deps.edn` as a resource
+5. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
+6. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
+
+To change the searched locations and their order set an option
+`:fmjrey.project/search-in` to one of, or a vector of:
+
+- `:basis`: this corresponds to item 1 above
+- `:project`: this corresponds to items 2 to 4 above
+- `:resource`: this corresponds to items 5 and 6 above
+
+For example to search only in the runtime basis:
+
+```clojure
+(def app-info
+  (project/project-info {:lib 'my.app/name
+                         :fmjrey.project/search-in :basis}))
+```
+
 ### Options
 
 All API entry points can take an options map with the following optional entries:
@@ -378,6 +376,8 @@ All API entry points can take an options map with the following optional entries
 - `:fmjrey.project/verbose`: when true the progression of the search is printed,
     and when set to `:very` it also prints the matching project entries.
 - `:fmjrey.project/loader`: the classloader to also use for loading resources.
+  The `project-info` macro adds the caller classloader automatically, if one is
+  not already provided.
 
 ## Development (TODO)
 
