@@ -94,26 +94,36 @@
        (interpose File/separator)
        (apply str)))
 
+(defn basis-project-root-deps
+  [{verbose ::verbose}]
+  (let [basis (basis/current-basis)
+        custd (get-in basis [:basis-config :dir])
+        custp (get-in basis [:basis-config :project] :standard)
+        custd? (and (string? custd)
+                    (not (re-matches #"^(?:\.[/\\]?)?$" custd)))
+        custp? (and (string? custp)
+                    (not (re-matches #"^(?:\.?[/\\])?deps\.edn$" custp)))
+        filepath (cond
+                   (and custd? custp?)       (str (io/file custd custp))
+                   (and (not custd?) custp?) custp
+                   (and custd? (not custp?)) (str (io/file custd "deps.edn"))
+                   true                      "deps.edn")]
+    (when verbose
+      (when custd?
+        (println "Found custom project path in current basis:" custd))
+      (when custp?
+        (println "Found custom edn path in current basis:" custp)))
+    [custd custp filepath]))
+
 (defn- start-opts
-  [{:keys [lib ::search-in ::verbose]
+  [{:keys [lib ::search-in]
     :or {search-in [:basis :project :resource]}
     :as opts}]
   (let [search-in (if (keyword? search-in) [search-in] search-in)]
     (reduce
      (fn [r k]
        (let [nocl (dissoc opts ::loader)
-             basis (basis/current-basis)
-             custd (get-in basis [:basis-config :dir])
-             custp (get-in basis [:basis-config :project] :standard)
-             custd? (and (string? custd)
-                         (not (re-matches #"^(?:\.[/\\]?)?$" custd)))
-             custp? (and (string? custp)
-                         (not (re-matches #"^(?:\.?[/\\])?deps\.edn$" custp)))]
-         (when verbose
-           (when custd?
-             (println "Found custom project path in current basis:" custd))
-           (when custp?
-             (println "Found custom edn path in current basis:" custp)))
+             [_ custp filepath] (basis-project-root-deps opts)]
          (case k
            :basis
            (cond-> r
@@ -122,18 +132,14 @@
              (map? custp) (conj (assoc nocl ::type :edn ::edn custp)))
            :project
            (cond-> r
-             (and custd? custp?)
-             (conj (assoc nocl ::type :file ::path (str (io/file custd custp))))
-             (and (not custd?) custp?)
-             (conj (assoc nocl ::type :file ::path custp))
-             (and custd? (not custp?))
-             (conj (assoc nocl ::type :file ::path (str (io/file custd
-                                                                 "deps.edn"))))
-             true (conj (assoc nocl ::type :file     ::path "deps.edn")))
+             (not= "deps.edn" filepath)
+             (conj (assoc nocl ::type :file ::path filepath))
+             true
+             (conj (assoc nocl ::type :file ::path "deps.edn")))
            :resource
            (cond-> r
              lib (conj (assoc opts ::type :resource
-                                ::path (resource-filename lib)))))))
+                              ::path (resource-filename lib)))))))
      [] search-in)))
 
 (defn- expand-opts

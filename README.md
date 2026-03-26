@@ -308,8 +308,10 @@ argument that must contain a `:lib` entry in the format `groupId/artifactId`.
 They return that hash map unchanged unless otherwise stated.
 
 - `copy-deps`: copy the project root `deps.edn` to a resource directory.
-  Options map must have a `:lib` entry in the format `groupId/artifactId`.
-  Return the options map unchanged. (TODO)
+  Options map must have a `:lib` entry in the format `groupId/artifactId`
+  and an optional `:fmjrey.project/resdir` to specify the destination resource
+  directory (defaults to `"resources"`).
+  Return the options map unchanged.
 - `read-project`, `searched-deps`, and their printing alternate: same as the
   runtime functions, no need to require `fmjrey.project`.
 
@@ -369,7 +371,7 @@ All API entry points can take an options map with the following optional entries
   - `:project`: the project root
   - `:resource`: the resource directory
   
-  Default to `[:basis :project :resource]`.
+  Defaults to `[:basis :project :resource]`.
 - `:fmjrey.project/alias`: the alias name under which project info is captured,
   which is also used as the key for storing the matching project data in the
   returned options map instead of the default `:project/info`.
@@ -378,6 +380,8 @@ All API entry points can take an options map with the following optional entries
 - `:fmjrey.project/loader`: the classloader to also use for loading resources.
   The `project-info` macro adds the caller classloader automatically, if one is
   not already provided.
+- `:fmjrey.project/resdir`: only used by `copy-deps` to specify the destination
+  resource directory. Defaults to `"resources"`.
 
 ## Development (TODO)
 

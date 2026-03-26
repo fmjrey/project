@@ -4,7 +4,10 @@
  :aliases
  {:project/info {:id fmjrey/project
                  :name "project"
-                 :ignored :entry}
+                 :license {
+                           :id "EPL-2.0"
+                           :name "Eclipse Public License 2.0"
+                           :url "https://www.eclipse.org/legal/epl-2.0"}}
   :test
   {:extra-paths ["test"]
    :extra-deps {io.github.clojure/tools.build
