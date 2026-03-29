@@ -31,7 +31,8 @@
 (s/def ::license1 (s/keys :opt [:license/id
                                 :license/name
                                 :license/url]))
-(s/def ::license (s/or ::license1 (s/coll-of ::license1)))
+(s/def ::license (s/or :one-license ::license1
+                       :license-vec (s/coll-of ::license1)))
 
 (s/def ::version (s/keys :opt [:version/major
                                :version/minor

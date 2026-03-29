@@ -4,8 +4,7 @@
  :aliases
  {:project/info {:id fmjrey/project
                  :name "project"
-                 :license {
-                           :id "EPL-2.0"
+                 :license {:id "EPL-2.0"
                            :name "Eclipse Public License 2.0"
                            :url "https://www.eclipse.org/legal/epl-2.0"}}
   :test
@@ -16,5 +15,6 @@
                 io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}}
   :build {:paths ["src" "resources"]
           :deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}
+                 org.clojure/tools.deps.edn {:mvn/version "0.9.22"}
                  slipset/deps-deploy {:mvn/version "0.2.2"}}
           :ns-default build}}}
