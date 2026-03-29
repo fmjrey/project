@@ -8,3 +8,5 @@ All notable changes to this project will be documented in this file. This change
 - Added edn loading from current and initial basis
 - Added use of custom project root and edn file from runtime basis
 - Added ::search-in option
+- Added lib and id matching check in copy-deps
+- Added search of project info in edn from clojure.tools.deps.edn/project-deps

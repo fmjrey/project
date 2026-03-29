@@ -68,7 +68,7 @@
   (cond-> opts
     (nil? alias) (assoc ::alias default-alias)))
 
-(defn readable?
+(defn readable-file
   [f]
   (try
     (let [ff (io/file f)]
@@ -123,7 +123,9 @@
     (reduce
      (fn [r k]
        (let [nocl (dissoc opts ::loader)
-             [_ custp filepath] (basis-project-deps opts)]
+             [_ custp filepath] (basis-project-deps opts)
+             project-deps-path (deps/project-deps-path)
+             project-deps (deps/project-deps)]
          (case k
            :basis
            (cond-> r
@@ -132,6 +134,9 @@
              (map? custp) (conj (assoc nocl ::type :edn ::edn custp)))
            :project
            (cond-> r
+             project-deps
+             (conj (assoc nocl ::type :edn ::edn project-deps
+                               ::path project-deps-path))
              (not= "deps.edn" filepath)
              (conj (assoc nocl ::type :file ::path filepath))
              true
@@ -172,19 +177,19 @@
     :or {alias default-alias}
     :as opts}]
   (let [project (get opts alias)
+        edn? (= :edn type)
         match? (and project (or (nil? lib) (= (:id project) lib)))
         print-project? (and match? (= :very verbose))
         basis? (#{:current-basis :initial-basis} type)
         msg (as-> (StringBuilder.) $
-              (.append $ (-> type name str/capitalize))
               (cond-> $
+                type (.append (-> type name str/upper-case))
                 path (.append " ")
-                path (.append path))
-              (.append $ ", ")
-              (cond-> $
+                path (.append path)
+                (not edn?) (.append ", ")
                 loader (.append "with caller classloader, ")
                 readable? (.append "found and readable")
-                (not (or readable? basis?)) (.append "not found or readable")
+                (not (or readable? basis? edn?)) (.append "not found or readable")
                 (and basis? (not project)) (.append "not found")
                 (and basis? project) (.append "found")
                 ;;
@@ -224,7 +229,7 @@
   (let [io? (#{:file :resource} type)
         file-or-res (when io?
                       (case type
-                        :file     (readable? path)
+                        :file     (readable-file path)
                         :resource (if loader
                                     (io/resource path loader)
                                     (io/resource path))))

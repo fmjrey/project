@@ -242,7 +242,7 @@ in order to define a var to capture the `:project/info` alias map, .e.g:
 ```
 
 The locations where project data is searched for are detailed in the
-[Search locations](search-locations) section below.
+[Search locations](search-locations) section.
 The search logic stops and returns the first project data found with an `:id`
 matching the symbol given as single argument, or given under the `:lib` entry
 within an options map also passed as single argument:
@@ -263,8 +263,7 @@ classloader, and then tries with an optional classloader if given with the
 classloader automatically, if not already provided, while other non-macro API
 functions detailed below don't.
 
-A list of all possible options is detailed in the [Options](#options) section
-below.
+A list of all possible options is detailed in the [Options](#options) section.
 
 #### Runtime functions
 
@@ -289,8 +288,7 @@ To also print the matching project entries add `:fmjrey.project/verbose :very`
 to the options map. Printing is in fact controlled by this option which is set
 to `true` by the printing functions (unless `:very` is passed).
 
-A list of all possible options is detailed in the [Options](#options) section
-below.
+A list of all possible options is detailed in the [Options](#options) section.
 
 ### Use within build.clj
 
@@ -322,32 +320,36 @@ CLI with the -T option:
 
 ```
 # copy project deps.edn to the resource directory
-clojure -T:build fmjrey.project.build/copy-deps :lib myorg/mylib
+clojure -T:build fmjrey.project.build/copy-deps :lib myorg/mylib :fmjrey.project/verbose :very
 # read project deps.edn
-clojure -T:build fmjrey.project.build/read-project :lib myorg/mylib
+clojure -T:build fmjrey.project.build/read-project :lib myorg/mylib :fmjrey.project/verbose :very
 # list all searched locations
-clojure -T:build fmjrey.project.build/searched-deps :lib myorg/mylib
+clojure -T:build fmjrey.project.build/searched-deps :lib myorg/mylib :fmjrey.project/verbose true
 ```
 
 ### Search locations
 By default project data is searched in the following locations in that order:
 
 1. [current and initial basis](https://clojure.org/reference/deps_edn#basis)
-2. Custom `deps.edn` location as per the runtime current basis, if available.
+2. `deps.edn` content as provided by `tools.deps.edn/project-deps` API
+   ([doc](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)).
+   This means `clojure.tools.deps.util.dir/with-dir` may be used to specify a
+   custom project directory.
+3. Custom `deps.edn` location as per the runtime current basis, if available.
    That is, a file path is created with the `:dir` and/or `project` entries from
    `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config))
    and is loaded as file then as a resource
-3. `deps.edn` as a file then as a resource
-4. `/deps.edn` as a resource
-5. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
-6. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
+4. `deps.edn` as a file then as a resource
+5. `/deps.edn` as a resource
+6. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
+7. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
 
 To change the searched locations and their order set an option
 `:fmjrey.project/search-in` to one of, or a vector of:
 
 - `:basis`: this corresponds to item 1 above
-- `:project`: this corresponds to items 2 to 4 above
-- `:resource`: this corresponds to items 5 and 6 above
+- `:project`: this corresponds to items 2 to 5 above
+- `:resource`: this corresponds to items 6 and 7 above
 
 For example to search only in the runtime basis:
 
@@ -371,6 +373,7 @@ All API entry points can take an options map with the following optional entries
   - `:project`: the project root
   - `:resource`: the resource directory
   
+  See the [Search locations](search-locations) section for more details.
   Defaults to `[:basis :project :resource]`.
 - `:fmjrey.project/alias`: the alias name under which project info is captured,
   which is also used as the key for storing the matching project data in the
