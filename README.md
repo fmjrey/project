@@ -331,25 +331,26 @@ clojure -T:build fmjrey.project.build/searched-deps :lib myorg/mylib :fmjrey.pro
 By default project data is searched in the following locations in that order:
 
 1. [current and initial basis](https://clojure.org/reference/deps_edn#basis)
-2. `deps.edn` content as provided by `tools.deps.edn/project-deps` API
+2. [Current `:basis-config` `:project` map](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)
+3. `deps.edn` content as provided by `tools.deps.edn/project-deps` API
    ([doc](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)).
    This means `clojure.tools.deps.util.dir/with-dir` may be used to specify a
    custom project directory.
-3. Custom `deps.edn` location as per the runtime current basis, if available.
+4. Custom `deps.edn` location as per the runtime current basis, if available.
    That is, a file path is created with the `:dir` and/or `project` entries from
    `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config))
    and is loaded as file then as a resource
-4. `deps.edn` as a file then as a resource
-5. `/deps.edn` as a resource
-6. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
-7. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
+5. `deps.edn` as a file then as a resource
+6. `/deps.edn` as a resource
+7. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
+8. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
 
 To change the searched locations and their order set an option
 `:fmjrey.project/search-in` to one of, or a vector of:
 
-- `:basis`: this corresponds to item 1 above
-- `:project`: this corresponds to items 2 to 5 above
-- `:resource`: this corresponds to items 6 and 7 above
+- `:basis`: this corresponds to item 1 and 2 above
+- `:project`: this corresponds to items 3 to 6 above
+- `:resource`: this corresponds to items 7 and 8 above
 
 For example to search only in the runtime basis:
 
@@ -386,7 +387,7 @@ All API entry points can take an options map with the following optional entries
 - `:fmjrey.project/resdir`: only used by `copy-deps` to specify the destination
   resource directory. Defaults to `"resources"`.
 
-## Development (TODO)
+## Development (TODO Update this template generated section)
 
 Invoke a library API function from the command-line:
 

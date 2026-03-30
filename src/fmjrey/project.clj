@@ -119,32 +119,32 @@
   [{:keys [lib ::search-in]
     :or {search-in [:basis :project :resource]}
     :as opts}]
-  (let [search-in (if (keyword? search-in) [search-in] search-in)]
+  (let [search-in (if (keyword? search-in) [search-in] search-in)
+        nocl (dissoc opts ::loader)
+        [_ custp filepath] (basis-project-deps opts)
+        project-deps-path (deps/project-deps-path)
+        project-deps (deps/project-deps)]
     (reduce
-     (fn [r k]
-       (let [nocl (dissoc opts ::loader)
-             [_ custp filepath] (basis-project-deps opts)
-             project-deps-path (deps/project-deps-path)
-             project-deps (deps/project-deps)]
-         (case k
-           :basis
-           (cond-> r
-             true         (conj (assoc nocl ::type :current-basis))
-             true         (conj (assoc nocl ::type :initial-basis))
-             (map? custp) (conj (assoc nocl ::type :edn ::edn custp)))
-           :project
-           (cond-> r
-             project-deps
-             (conj (assoc nocl ::type :edn ::edn project-deps
-                               ::path project-deps-path))
-             (not= "deps.edn" filepath)
-             (conj (assoc nocl ::type :file ::path filepath))
-             true
-             (conj (assoc nocl ::type :file ::path "deps.edn")))
-           :resource
-           (cond-> r
-             lib (conj (assoc opts ::type :resource
-                              ::path (resource-filename lib)))))))
+     (fn [result in]
+       (case in
+         :basis
+         (cond-> result
+           true         (conj (assoc nocl ::type :current-basis))
+           true         (conj (assoc nocl ::type :initial-basis))
+           (map? custp) (conj (assoc nocl ::type :edn ::edn custp)))
+         :project
+         (cond-> result
+           project-deps
+           (conj (assoc nocl ::type :edn ::edn project-deps
+                        ::path project-deps-path))
+           (not= "deps.edn" filepath)
+           (conj (assoc nocl ::type :file ::path filepath))
+           true
+           (conj (assoc nocl ::type :file ::path "deps.edn")))
+         :resource
+         (cond-> result
+           lib (conj (assoc opts ::type :resource
+                            ::path (resource-filename lib))))))
      [] search-in)))
 
 (defn- expand-opts
