@@ -224,11 +224,11 @@ These require the following dependency declaration in your project `deps.edn`:
            :ns-default build}}}
 ```
 
-Note how the above `deps.edn` example defines 2 nearly similar aliases:
+Note how the above `deps.edn` example defines 2 similar aliases:
 
 - `:project`: for easier CLI use as it defaults to the `fmjrey.project.build`
   namespace and adds the verbose option (otherwise nothing is printed),
-- `:build`: for use in `build.clj`
+- `:build`: for use in `build.clj`.
 
 ### Use as a runtime library
 
@@ -360,7 +360,7 @@ By default project data is searched in the following locations in that order:
 To change the searched locations and their order set an option
 `:fmjrey.project/search-in` to one of, or a vector of:
 
-- `:basis`: this corresponds to item 1 and 2 above
+- `:basis`: this corresponds to items 1 and 2 above
 - `:project`: this corresponds to items 3 to 6 above
 - `:resource`: this corresponds to items 7 and 8 above
 
