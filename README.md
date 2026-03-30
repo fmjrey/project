@@ -428,7 +428,10 @@ abbreviation.
 |U|Unlikely|Unlikely to be found unless explicitely added/copied in a resource root dir. Not really recommended but some existing project may have done so.|
 |RO|Runtime Only|Intended for runtime use only. May also be picked up at dev/ops time, but other locations should be preferred and searched first.|
 |BC|Basis Config|A file path is created with the `:dir` and/or `:project` entries from `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config)), and searched as a file then as a resource, unless it points to the default project `deps.edn`.|
-|RT|RooT|A leading `/` designates the root of the classpath which may make sense in some environments and classloaders.|
+|RT|RooT|A leading `/** designates the root of the classpath which may make sense in some environments and classloaders.|
+
+**NOTE** The Excel spreadsheet that was used to build the tables above is
+in this repository (xlsx file in root).
 
 ## Options
 
