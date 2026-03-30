@@ -171,8 +171,10 @@ could rely on such additional key:
 - `:version-pattern`: the `format` pattern for creating the `:version-string`
   along with an argument list referencing other keys in the `:project/info` map
   using the syntax `["format-pattern" :single-key [:submap :key]...]`, e.g.:
-  `["v\\d+\\.\\d+\\.\\d+-\\s" [:version :major] [:version :minor]
-                              [:source :rev-count] [:source :sha]]`
+  ```clojure
+  ["v\\d+\\.\\d+\\.\\d+-\\s" [:version :major] [:version :minor]
+                             [:source :rev-count] [:source :sha]]
+  ```
 
 The above is not suggesting to store SHA and revision count inside `deps.edn`.
 In fact values that quickly change over time such as these are discouraged in
@@ -254,7 +256,7 @@ in order to define a var to capture the `:project/info` alias map, .e.g:
 ```
 
 The locations where project data is searched for are detailed in the
-[Search locations](search-locations) section.
+[Searched locations](searched-locations) section.
 The search logic stops and returns the first project data found with an `:id`
 matching the symbol given as single argument, or given under the `:lib` entry
 within an options map also passed as single argument:
@@ -313,17 +315,26 @@ The require entry should be as follows:
 [fmjrey.project.build :as project]
 ```
 
-The following task function are provided, each taking an options map as single
-argument that must contain a `:lib` entry in the format `groupId/artifactId`.
-They return that hash map unchanged unless otherwise stated.
+For convenience most of the public functions from the `fmjrey.project` namespace
+are also available in the `fmjrey.project.build` namespace, e.g. `read-project`,
+`searched-deps`, and their printing alternate are the same, no need to require
+`fmjrey.project`, and their above description also apply here.
+One additional function however is available only in the `fmjrey.project.build`
+namespace:
 
 - `copy-deps`: copy the project root `deps.edn` to a resource directory.
   Options map must have a `:lib` entry in the format `groupId/artifactId`
   and an optional `:fmjrey.project/resdir` to specify the destination resource
-  directory (defaults to `"resources"`).
+  directory (defaults to `"resources"`). The
+  [Current basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)
+  is checked for a custom project root and `deps.edn` path in order to determine
+  the path to the project `deps.edn` when not in the project root directory.
   Return the options map unchanged.
-- `read-project`, `searched-deps`, and their printing alternate: same as the
-  runtime functions, no need to require `fmjrey.project`.
+  **TODO:** add ability to also use `tools.deps.edn/project-deps-path` API
+   ([doc](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps-path))
+   so that `clojure.tools.deps.util.dir/with-dir` may be used to specify a
+   custom project directory to determine source and destination. This should be
+   controlled by an option. **What default behavior should this option have?**
 
 ### Use from clojure CLI
 
@@ -339,30 +350,31 @@ clojure -T:project read-project :lib myorg/mylib :fmjrey.project/verbose :very
 clojure -T:project searched-deps :lib myorg/mylib
 ```
 
-### Search locations
+## Searched locations
 By default project data is searched in the following locations in that order:
 
-1. [current and initial basis](https://clojure.org/reference/deps_edn#basis)
-2. [Current `:basis-config` `:project` map](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)
-3. `deps.edn` content as provided by `tools.deps.edn/project-deps` API
+1. [Current basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)
+2. [Initial basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/initial-basis)
+3. [Current `:basis-config` `:project` map](https://clojure.github.io/clojure/clojure.java.basis-api.html)
+4. `deps.edn` content as provided by `tools.deps.edn/project-deps` API
    ([doc](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)).
    This means `clojure.tools.deps.util.dir/with-dir` may be used to specify a
    custom project directory.
-4. Custom `deps.edn` location as per the runtime current basis, if available.
-   That is, a file path is created with the `:dir` and/or `project` entries from
-   `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config))
-   and is loaded as file then as a resource
-5. `deps.edn` as a file then as a resource
-6. `/deps.edn` as a resource
-7. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
-8. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
+5. Custom `deps.edn` location as per the runtime current basis, using a file path
+   created with the `:dir` and/or `:project` entries from `:basis-config`
+   ([doc](https://clojure.org/reference/deps_edn#basis_config)), and loaded as
+   a file then as a resource, unless it points to the default project  `deps.edn`
+6. `deps.edn` as a file then as a resource
+7. `/deps.edn` as a resource
+8. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
+9. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
 
-To change the searched locations and their order set an option
+To change the searched locations and their order set the option
 `:fmjrey.project/search-in` to one of, or a vector of:
 
-- `:basis`: this corresponds to items 1 and 2 above
-- `:project`: this corresponds to items 3 to 6 above
-- `:resource`: this corresponds to items 7 and 8 above
+- `:basis`: this corresponds to items 1 and 3 above
+- `:project`: this corresponds to items 4 to 7 above
+- `:resource`: this corresponds to items 8 and 9 above
 
 For example to search only in the runtime basis:
 
@@ -372,7 +384,53 @@ For example to search only in the runtime basis:
                          :fmjrey.project/search-in :basis}))
 ```
 
-### Options
+The table below summarizes the applicability of each location, as best as can be
+determined. It uses abbreviations that are explained further below:
+
+|#|Location|`::search-in`|as (`::type`)|Applicability|From|For|If|Notes|
+|:--|:--|:--|:--|:--|:--|:--|:--|:--|
+|1|[Current basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)|`:basis`|`:current-basis`|RUN, DEV|P|P|CLI, SRC|BA|
+|2|[Initial basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/initial-basis)|`:basis`|`:initial-basis`|RUN, DEV|P|P|CLI, SRC|BA|
+|3|[Current `:basis-config` `:project` map](https://clojure.github.io/clojure/clojure.java.basis-api.html)|`:basis`|`:edn`|RUN, DEV|P|P||CLI?|
+|4|[`clojure.tools.deps.edn/project-deps`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)|`:project`|`:edn`|RUN, DEV|P|P|SRC|WD|
+|5|Custom `deps.edn` path from [current basis](https://clojure.org/reference/deps_edn#basis_config)|`:project`|`:file`|RUN, DEV|P|P|SRC|BC, CLI?|
+|||`:project`|`:resource`|RUN|P|P||BC, CLI?, U, RO|
+|6|`deps.edn`|`:project`|`:file`|RUN, DEV|P|P|SRC||
+|||`:project`|`:resource`|RUN|P|P|JAR, UJAR|U, RO|
+|||`:project`|`:resource`|RUN|D|D|JAR, DSRC|U, RO|
+|7|`/deps.edn`|`:project`|`:resource`|RUN|P|P|JAR, UJAR|U, RO, RT|
+|||`:project`|`:resource`|RUN|D|D|JAR, DSRC|U, RO, RT|
+|8|`deps/<group-id>/<artifact-id>/deps.edn` |`:resource`|`:resource`|RUN|P|P, D|JAR, UJAR|RO|
+|||`:resource`|`:resource`|RUN|D|D|JAR, UJAR|RO|
+|9|`/deps/<group-id>/<artifact-id>/deps.edn` |`:resource`|`:resource`|RUN|P|P, D|JAR, UJAR|RO, RT|
+|||`:resource`|`:resource**|RUN|D|D|JAR, UJAR|RO, RT|
+
+**Applicability mnemonics**
+
+This table explains the applicability mnemonics, showing the meaning next to its
+abbreviation.
+
+||Applicability|From|code in|For |getting project info of|If |launched/linked by|
+|:--|:--|:--|:--|:--|:--|:--|:--|
+|N/A|Not Applicable|P|dependent project|P|dependent project|CLI|clojure CLI (project source dir)|
+|RUN|Runtime|D|dependency|D|a dependency |SRC|in source dir|
+|DEV|Dev+Ops|||||DSRC|deps from source (git or local, requires CLI)|
+|||||||JAR|jar file (and maven/clojars deps)|
+|||||||UJAR|uberjar file|
+
+**Notes**
+
+|Abr.|Mnemonic|Notes|
+|:--|:--|:--|
+|BA|Basis|The runtime basis is set as a JVM system property by the clojure CLI host-specific scripts, and is cached on disk ([doc](https://clojure.org/reference/clojure_cli#cache_dir)).|
+|CLI?|CLI needed?|The clojure CLI does not seem to be needed for this, this case is more likely set programmatically (e.g. testing, custom config, etc.)|
+|WD|With Dir|The function `clojure.tools.deps.util.dir/with-dir` ([doc](https://cljdoc.org/d/org.clojure/tools.deps.edn/0.9.22/api/clojure.tools.deps.util.dir#with-dir)) may be used to specify a custom project directory.|
+|U|Unlikely|Unlikely to be found unless explicitely added/copied in a resource root dir. Not really recommended but some existing project may have done so.|
+|RO|Runtime Only|Intended for runtime use only. May also be picked up at dev/ops time, but other locations should be preferred and searched first.|
+|BC|Basis Config|A file path is created with the `:dir` and/or `:project` entries from `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config)), and searched as a file then as a resource, unless it points to the default project `deps.edn`.|
+|RT|RooT|A leading `/` designates the root of the classpath which may make sense in some environments and classloaders.|
+
+## Options
 
 All API entry points can take an options map with the following optional entries:
 
@@ -386,7 +444,7 @@ All API entry points can take an options map with the following optional entries
   - `:project`: the project root
   - `:resource`: the resource directory
   
-  See the [Search locations](search-locations) section for more details.
+  See the [Searched locations](searched-locations) section for more details.
   Defaults to `[:basis :project :resource]`.
 - `:fmjrey.project/alias`: the alias name under which project info is captured,
   which is also used as the key for storing the matching project data in the
