@@ -15,7 +15,7 @@ where it can.
 with versioning, and thus may seem like a good place to start. Except projects
 do not necessarily need a build file, or have a it named `build.clj`.
 Also `build.clj` isn't so much about data, and more about logic, though it most
-likely need project data to carry its work.
+likely needs project data to carry its work.
 Then there is `deps.edn` which mostly deals with dependencies and does not say
 much about the dependent side (e.g. `:paths`). It could say more, the verb
 _to depend_ is transitive and requires a dependent subject and one or more
@@ -55,7 +55,7 @@ In terms of design here are some important considerations:
 
    A: Project data shouldn't be defined elsewhere than in the project root
    `deps.edn`. There are two different merge strategies being applied, the
-   first one being the most constraining for a project data alias:
+   first one being the most constraining for a `:project/info` alias:
    - First step: combine all the different root, user, project, and extra
      `deps.edn` into a single one using `clojure.core/merge`. In other words the
      last entry (the most specific one on the left) replaces the previous ones
@@ -84,7 +84,7 @@ In terms of design here are some important considerations:
    A: Load from project root first, and if not found try as a resource.
 
 5. Q: How to ensure a library is loading its own `deps.edn` and not the one
-   from another library or even the dependent application?
+   from another library or even from the dependent application?
 
    A: Copy the `deps.edn` file into the `deps/<group-id>/<artifact-id>/`
    resource directory. Search `deps.edn` first in project root then in
@@ -106,9 +106,9 @@ In terms of design here are some important considerations:
 
 This library is therefore an experiment to use `deps.edn` as the place where
 project data is captured into a new `:project/info` alias. It also provides
-a way to retrieve it at runtime by copying `deps.edn` into a resource directory.
-The library is written in a way that should make it reasonably easy to merge with
-[tools.deps.edn](https://github.com/clojure/tools.deps.edn).
+a way to retrieve it at runtime from a jar by copying `deps.edn` into a resource
+directory. The library is written in a way that should make it reasonably easy
+to merge with [tools.deps.edn](https://github.com/clojure/tools.deps.edn).
 
 ## deps.edn :project/info alias
 
@@ -120,8 +120,7 @@ in a resource directory should not be edited and preferably not checked in.
 ### :project/info alias entries
 
 In `deps.edn`, project related data about the dependent side should be placed
-in a map under the `:project/info` alias entry, ideally as the first one, and
-containing the following entries:
+in a map under the `:project/info` alias, and containing the following entries:
 
 - `:id`: a qualified symbol identifying the project, as expected under `:lib` by
         [write-pom](https://clojure.github.io/tools.build/clojure.tools.build.api.html#var-write-pom)
@@ -138,7 +137,7 @@ containing the following entries:
 - `:version`: map containing internal version information, typically:
   - `:major`: the major version number as an integer
   - `:minor`: the minor version number as an integer
-  - `:patch`: the patch version number as an integer, if any
+  - `:patch`: the patch version number as an integer
 - `:source`: map containing coordinates for the project source, including:
   - `:url`: the URL where to find the source code, such as a git repository
   - `:rev`: the revision reference for this release, which in the case of git
@@ -153,7 +152,7 @@ greeting and diagnostic printing, etc.
 Entries in the `:version` map are not normative, only suggested. The intent is
 to capture the most significant data to compute a full version so it remains
 consistent, editable, and does not always require parsing to extract useful
-information (great for tooling).
+information.
 
 Entries in the `:source` map are not normative either. While for dependencies
 there is a need to be very precise on how to fetch source code, the goal here
@@ -169,17 +168,17 @@ that if that makes more sense for your use case.
 Projects may add additional entries as needed. For example the versioning logic
 could rely on such additional key:
 
-- `:version-pattern`: the `format` pattern for creating the `version-string`
-  along with an argument list referencing other keys in the `:project` map
+- `:version-pattern`: the `format` pattern for creating the `:version-string`
+  along with an argument list referencing other keys in the `:project/info` map
   using the syntax `["format-pattern" :single-key [:submap :key]...]`, e.g.:
   `["v\\d+\\.\\d+\\.\\d+-\\s" [:version :major] [:version :minor]
                               [:source :rev-count] [:source :sha]]`
 
 The above is not suggesting to store SHA and revision count inside `deps.edn`.
-In fact values that quickly change over time such as these are discouraged
-unless you have automation to always keep them up to date. However one could
-imagine the project map to be augmented at runtime with these entries in order
-to provide them to the next build step.
+In fact values that quickly change over time such as these are discouraged in
+`:project/info`unless you have automation to always keep them up to date.
+However one could imagine the project map to be augmented at runtime with these
+time-dependent entries in order to provide them to the next build step.
 
 Finally, in the rare case where a different alias name needs to be used to
 capture project info, the `:fmjrey.project/alias` option can be set to the alias
@@ -212,11 +211,24 @@ These require the following dependency declaration in your project `deps.edn`:
        :id "EPL-2.0"
        :name "Eclipse Public License 2.0"
        :url "https://www.eclipse.org/legal/epl-2.0"}}
-   ;; build and CLI use
+   ;; CLI use
+   :project {:deps {io.github.clojure/tools.build {:git/tag "TAG" :git/sha "SHA"}
+                    org.clojure/tools.deps.edn {:mvn/version "0.9.22"} ; or later
+                    fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
+             :exec-args {:fmjrey.project/verbose true}
+             :ns-default fmjrey.project.build}
+   ;; build and task use
    :build {:deps {io.github.clojure/tools.build {:git/tag "TAG" :git/sha "SHA"}
+                  org.clojure/tools.deps.edn {:mvn/version "0.9.22"} ; or later
                   fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
            :ns-default build}}}
 ```
+
+Note how the above `deps.edn` example defines 2 nearly similar aliases:
+
+- `:project`: for easier CLI use as it defaults to the `fmjrey.project.build`
+  namespace and adds the verbose option (otherwise nothing is printed),
+- `:build`: for use in `build.clj`
 
 ### Use as a runtime library
 
@@ -252,7 +264,7 @@ within an options map also passed as single argument:
 ```
 When no symbol is given to `project-info` it can only search project data for the
 running application in its runtime basis and project root directory and not in
-the project specific resource directory. It will also  return the first project
+the project specific resource directory. It will also return the first project
 data found regardless of its `:id`. For a more deterministic outcome it is best
 to provide a symbol argument, and certainly necessary in the case of a library
 code wishing to load its own project data instead of the dependent project data.
@@ -320,11 +332,11 @@ CLI with the -T option:
 
 ```
 # copy project deps.edn to the resource directory
-clojure -T:build fmjrey.project.build/copy-deps :lib myorg/mylib :fmjrey.project/verbose :very
+clojure -T:project copy-deps :lib myorg/mylib
 # read project deps.edn
-clojure -T:build fmjrey.project.build/read-project :lib myorg/mylib :fmjrey.project/verbose :very
+clojure -T:project read-project :lib myorg/mylib :fmjrey.project/verbose :very
 # list all searched locations
-clojure -T:build fmjrey.project.build/searched-deps :lib myorg/mylib :fmjrey.project/verbose true
+clojure -T:project searched-deps :lib myorg/mylib
 ```
 
 ### Search locations
