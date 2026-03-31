@@ -384,41 +384,46 @@ For example to search only in the runtime basis:
                          :fmjrey.project/search-in :basis}))
 ```
 
-The table below summarizes the applicability of each location, as best as can be
-determined. It uses abbreviations that are explained further below:
+The table below summarizes the applicability of each above location broken into
+the corresponding `::search-in` option value and internal `::type`.
+Disclaimer: there isn't at present a test case for each row, meaning this table
+is made from the best knowledge of the author who would be happy to get
+feedback and experience reports. Certainly rows having a note abbreviated by U
+are not expected to be applicable in most cases, but may in some, and should
+probably not be relied upon systematically unless it's the only option.
+In any case passing a library symbol as a `:lib` parameter is the best way to
+ensure more reliable results.
+To save space the table uses abbreviations that are explained further below.
 
 |#|Location|`::search-in`|as (`::type`)|Applicability|From|For|If|Notes|
 |:--|:--|:--|:--|:--|:--|:--|:--|:--|
-|1|[Current basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)|`:basis`|`:current-basis`|RUN, DEV|P|P|CLI, SRC|BA|
-|2|[Initial basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/initial-basis)|`:basis`|`:initial-basis`|RUN, DEV|P|P|CLI, SRC|BA|
-|3|[Current `:basis-config` `:project` map](https://clojure.github.io/clojure/clojure.java.basis-api.html)|`:basis`|`:edn`|RUN, DEV|P|P||CLI?|
-|4|[`clojure.tools.deps.edn/project-deps`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)|`:project`|`:edn`|RUN, DEV|P|P|SRC|WD|
-|5|Custom `deps.edn` path from [current basis](https://clojure.org/reference/deps_edn#basis_config)|`:project`|`:file`|RUN, DEV|P|P|SRC|BC, CLI?|
+|1|[Current basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)|`:basis`|`:current-basis`|RUN, DEV|P, D|P|CLI, SRC|BA|
+|2|[Initial basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/initial-basis)|`:basis`|`:initial-basis`|RUN, DEV|P, D|P|CLI, SRC|BA|
+|3|[Current `:basis-config` `:project` map](https://clojure.github.io/clojure/clojure.java.basis-api.html)|`:basis`|`:edn`|RUN, DEV|P, D|P||CLI?|
+|4|[`clojure.tools.deps.edn/project-deps`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)|`:project`|`:edn`|RUN, DEV|P, D|P|SRC|WD|
+|5|[Custom `deps.edn` path from current basis](https://clojure.org/reference/deps_edn#basis_config)|`:project`|`:file`|RUN, DEV|P, D|P|SRC|BC, CLI?|
 |||`:project`|`:resource`|RUN|P|P||BC, CLI?, U, RO|
-|6|`deps.edn`|`:project`|`:file`|RUN, DEV|P|P|SRC||
+|6|`deps.edn`|`:project`|`:file`|RUN, DEV|P, D|P|SRC||
 |||`:project`|`:resource`|RUN|P|P|JAR, UJAR|U, RO|
-|||`:project`|`:resource`|RUN|D|D|JAR, DSRC|U, RO|
+|||`:project`|`:resource`|RUN|D|I|JAR, DSRC|U, RO|
 |7|`/deps.edn`|`:project`|`:resource`|RUN|P|P|JAR, UJAR|U, RO, RT|
-|||`:project`|`:resource`|RUN|D|D|JAR, DSRC|U, RO, RT|
-|8|`deps/<group-id>/<artifact-id>/deps.edn` |`:resource`|`:resource`|RUN|P|P, D|JAR, UJAR|RO|
-|||`:resource`|`:resource`|RUN|D|D|JAR, UJAR|RO|
-|9|`/deps/<group-id>/<artifact-id>/deps.edn` |`:resource`|`:resource`|RUN|P|P, D|JAR, UJAR|RO, RT|
-|||`:resource`|`:resource**|RUN|D|D|JAR, UJAR|RO, RT|
+|||`:project`|`:resource`|RUN|D|I|JAR, DSRC|U, RO, RT|
+|8|`deps/<group-id>/<artifact-id>/deps.edn` |`:resource`|`:resource`|RUN|P, D|P, D|JAR, UJAR|RO|
+|9|`/deps/<group-id>/<artifact-id>/deps.edn` |`:resource`|`:resource`|RUN|P, D|P, D|JAR, UJAR|RO, RT|
 
-**Applicability mnemonics**
+**Applicability abbreviations**
 
-This table explains the applicability mnemonics, showing the meaning next to its
-abbreviation.
+This table explains the applicability abbreviations with meaning to its right.
 
-||Applicability|From|code in|For |getting project info of|If |launched/linked by|
+||Applicability|From|code in|For|getting project info of|If|launched/linked by|
 |:--|:--|:--|:--|:--|:--|:--|:--|
 |N/A|Not Applicable|P|dependent project|P|dependent project|CLI|clojure CLI (project source dir)|
 |RUN|Runtime|D|dependency|D|a dependency |SRC|in source dir|
-|DEV|Dev+Ops|||||DSRC|deps from source (git or local, requires CLI)|
+|DEV|Dev+Ops|||I|Itself|DSRC|deps from source (git or local, requires CLI)|
 |||||||JAR|jar file (and maven/clojars deps)|
 |||||||UJAR|uberjar file|
 
-**Notes**
+**Notes abbreviations**
 
 |Abr.|Mnemonic|Notes|
 |:--|:--|:--|
