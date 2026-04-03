@@ -195,38 +195,38 @@ This library can be used in 3 different ways:
 2. within your project `build.clj` or equivalent
 3. as a clojure CLI command with the -T or -X options
 
-At runtime there is no need to load the clojure build API, which is only really
-needed for copying the `deps.edn` file to the resource directory. Therefore two
-separate namespaces are offered, `fmjrey.project` for runtime use, and
-`fmjrey.project.build` for build and CLI usage, which refers to some functions
-in the first for convenience.
-These require the following dependency declaration in your project `deps.edn`:
+Two separate namespaces are offered, `fmjrey.project` for runtime use, and
+`fmjrey.project.build` for build and CLI usage, and the latter refers to some
+functions in the first for convenience. Only the latter requires
+`io.github.clojure/tools.build` as a dependency for copying the `deps.edn` file
+to the resource directory. However to not load the build API when using the
+former, `io.github.clojure/tools.build` is not declared as a dependency by this
+project, and therefore must be declared as a dependency in yours, as illustrated
+by the sample `deps.edn` below:
 
 ```clojure
 {:deps {fmjrey/project {:git/tag "TAG" :git/sha "SHA"}} ;; runtime use
  :aliases {
    ;; easier to find as the first alias
-   :project/info {
-     :id: my.app/name
-     :name "my app name"
-     :license {
-       :id "EPL-2.0"
-       :name "Eclipse Public License 2.0"
-       :url "https://www.eclipse.org/legal/epl-2.0"}}
+   :project/info {:id: my.app/name
+                  :name "my app name"
+                  :license {:id "EPL-2.0"
+                  :name "Eclipse Public License 2.0"
+                  :url "https://www.eclipse.org/legal/epl-2.0"}}
    ;; CLI use
    :project {:deps {io.github.clojure/tools.build {:git/tag "TAG" :git/sha "SHA"}
-                    org.clojure/tools.deps.edn {:mvn/version "0.9.22"} ; or later
                     fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
-             :exec-args {:fmjrey.project/verbose true}
+             :exec-args {:fmjrey.project/verbose true} ; otherwise no printing
              :ns-default fmjrey.project.build}
    ;; build and task use
-   :build {:deps {io.github.clojure/tools.build {:git/tag "TAG" :git/sha "SHA"}
-                  org.clojure/tools.deps.edn {:mvn/version "0.9.22"} ; or later
+   :build {:deps {;; tools.build must be declared here
+                  io.github.clojure/tools.build {:git/tag "TAG" :git/sha "SHA"}
                   fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
            :ns-default build}}}
 ```
 
-Note how the above `deps.edn` example defines 2 similar aliases:
+Note how the above `deps.edn` defines 2 aliases that both declare
+`io.github.clojure/tools.build` as a dependency:
 
 - `:project`: for easier CLI use as it defaults to the `fmjrey.project.build`
   namespace and adds the verbose option (otherwise nothing is printed),
@@ -435,8 +435,9 @@ This table explains the applicability abbreviations with meaning to its right.
 |BC|Basis Config|A file path is created with the `:dir` and/or `:project` entries from `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config)), and searched as a file then as a resource, unless it points to the default project `deps.edn`.|
 |RT|RooT|A leading `/** designates the root of the classpath which may make sense in some environments and classloaders.|
 
-**NOTE** The Excel spreadsheet that was used to build the tables above is
-in this repository (xlsx file in root).
+**NOTE** An Excel spreadsheet was used to build the tables above is
+in this repository under `doc`. To convert it to markdown tables use the
+[exceltk](https://github.com/fanfeilong/exceltk) tool.
 
 ## Options
 
