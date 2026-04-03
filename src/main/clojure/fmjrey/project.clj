@@ -107,7 +107,7 @@
                    (and custd? custp?)       (str (io/file custd custp))
                    (and (not custd?) custp?) custp
                    (and custd? (not custp?)) (str (io/file custd "deps.edn"))
-                   true                      "deps.edn")]
+                   :else                     "deps.edn")]
     (when verbose
       (when custd?
         (println "Found custom project path in current basis:" custd))
