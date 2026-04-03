@@ -27,4 +27,8 @@
 /checkouts
 /classes
 /target
-/resources/deps/
+/src/main/resources/deps/
+/tmp
+/doc/Project-infoApplicability.md
+/doc/Project-infoLocations.md
+/doc/Project-infoNotes.md
