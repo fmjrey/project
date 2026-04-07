@@ -16,13 +16,11 @@
       (cons (first s)
             (unchunk (next s))))))
 
-(defn- remove-work-keys
-  [m]
-  (not-empty (into {}
-                   (remove (fn [[k _]]
-                             (and (keyword? k)
-                                  (= (namespace k) (namespace ::here))))
-                           m))))
+(defn- remove-ns-keys
+  ([m] (remove-ns-keys m (namespace ::here)))
+  ([m ns-str]
+   (not-empty (reduce-kv #(if (= ns-str (namespace %2)) %1 (assoc %1 %2 %3))
+                         {} m))))
 
 (defn valid-lib?
   ([op lib] (valid-lib? op lib {}))
@@ -33,6 +31,16 @@
            (format "Invalid lib in %s: got %s, expected a qualified symbol"
                    op lib)
            opts)))))
+
+(defn valid-search-in?
+  ([op search-in] (valid-search-in? op search-in {}))
+  ([op search-in opts]
+   (or (specs/valid-search-in? search-in)
+       (throw
+        (ex-info
+         (format "Invalid search-in in %s: got %s, expected one of, or a vector of #{:basis :project :resource}"
+                 op search-in)
+         opts)))))
 
 (defn valid-alias?
   ([op alias] (valid-alias? op alias {}))
@@ -45,16 +53,6 @@
          opts)))))
 
 (def default-alias :project/info)
-
-(defn valid-search-in?
-  ([op search-in] (valid-search-in? op search-in {}))
-  ([op search-in opts]
-   (or (specs/valid-search-in? search-in)
-       (throw
-        (ex-info
-         (format "Invalid search-in in %s: got %s, expected one of, or a vector of #{:basis :project :resource}"
-                 op search-in)
-         opts)))))
 
 (defn valid-opts?
   [op {:keys [lib ::alias ::search-in]
@@ -309,7 +307,7 @@
        (map validate-project-info)
        (some matching?)
        (print-summary opts)
-       remove-work-keys))
+       remove-ns-keys))
 
 (defn print-project
   [opts]
