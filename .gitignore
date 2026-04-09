@@ -2,7 +2,7 @@
 .calva/repl.calva-repl
 .classpath
 .clj-kondo/.cache
-.cpcache
+**/.cpcache
 .eastwood
 .factorypath
 .hg/
@@ -26,9 +26,9 @@
 *~
 /checkouts
 /classes
-/target
+**/target
 /src/main/resources/deps/
-/tmp
 /doc/Project-infoApplicability.md
 /doc/Project-infoLocations.md
 /doc/Project-infoNotes.md
+!/test-data/project3/project3-0.1.3.jar

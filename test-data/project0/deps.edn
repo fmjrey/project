@@ -1,0 +1,18 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.4"}
+        fmjrey/project {:local/root "../.."}
+        test/project1 {:local/root "../project1"}
+        test/project2 {:local/root "../project2"}
+        test/project3 {:local/root "../project3/project3-0.1.3.jar"}}
+ :tools/usage {:ns-default test.project0}
+ :aliases
+ {:project/info {:id test/project0
+                 :name "Test project #0"
+                 :license {:id "EPL-2.0"
+                           :name "Eclipse Public License 2.0"
+                           :url "https://www.eclipse.org/legal/epl-2.0"}}
+  :cli {:ns-default test.project0}
+  :build
+  {:deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}
+          fmjrey/project {:local/root "../.."}}
+   :ns-default build}}}
