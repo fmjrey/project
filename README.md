@@ -509,35 +509,82 @@ More internally used options are explained in the
 ## Customization
 
 The options described in the [Options](#options) section should be the
-first entry point for customization. In addition to these, this library
-uses an internal "mini-DSL" for describing a single project info
-location that is captured as a vector in the `::source` option entry.
-It is a vector of symbols and keywords that respectively evaluate to some
-retrieval logic and a map value. It is interpreted from left to right as if
-its elements were threaded with `->`.
+first entry point for customization. In addition to these, more refined
+customization can be achieved with the `::source` option that is used
+internally as a "mini-DSL" for describing a single project info location.
+
+This capability was originally created to have a unique location identifier
+that also represent some of its constitutive parts, so as to enable finer
+generative testing logic. The code simplification it provided led to its
+evolution into a mini-DSL that drives the search for project info in all
+cases.
+
+Exposing it as a customization feature may offer all the advantages DSLs
+can offer, notably a declarative approach, but also all the drawbacks in
+terms of abuse and potential frustrations with its narrow scope.
+Nevertheless it's being presented here to elicit feedback on its
+relevance and possible usage.
+
+### The `::source` option
+
+The `::source` option is used internally to represent unambiguously a
+location where to search for project info. It must contain a vector of
+literal values where symbols and keywords respectively evaluate to some
+some retrieval logic and map values. The vector is interpreted from left
+to right as if its elements were threaded with `some->`, meaning the result
+of one token is passed to the next and any `nil` result stops the threading.
+Here are how literals are handled:
+
+- Any literal that isn't of one of the type listed below just starts a new
+  threading by ignoring the previous result and using itself as the result
+  to be passed to the next step. For example many source vectors start with
+  a string to be interpreted in the next step as a path to a `deps.edn` file.
+- Keywords are applied as a function to the previous result in order to
+  retrieve a map value.
+- Symbols are interpreted in a `case` statement (no `eval`!) to apply
+  specific logic. In case of an unknown symbol it starts a new threading,
+  ignoring the previous result and passing itself to the next step.
+  Below is a table of currently interpreted symbols:
+  
+  |Symbol|Triggered logic|
+  |:--|:--|
+  |`'current-basis`|[`clojure.java.basis/current-basis`](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)|
+  |`'initial-basis`|[`clojure.java.basis/initial-basis`](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/initial-basis)|
+  |`'project-deps`|[`clojure.tools.deps.edn/project-deps`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)|
+  |`'file`|[`clojure.java.io/file`](https://clojuredocs.org/clojure.java.io/file)|
+  |`'resource`|[`clojure.java.io/resource`](https://clojuredocs.org/clojure.java.io/resource)|
+  |`'resource-cl`|[`clojure.java.io/resource` with classloader](https://clojuredocs.org/clojure.java.io/resource)|
+  |`'read-edn`|[`clojure.java.io/reader` + `clojure.tools.deps.edn/read-edn`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)|
+
 
 The earlier [location applicability table](applicability-for-each-location)
 gives for each location the initial `::source` vector. It also gives the
 internal `::type` of the `::source`, or more precisely the type of value that
-should result from applying the corresponding `::source` vector.
+should result from interpreting the corresponding `::source` vector.
+Below are the current types that can be used:
 
-The `::type` is also used to specify additional logic before and after
-interpreting the `::source` vector. For example before interpretation it can
-set the scene by changing the working directory, or add additional elements to
-the `::source` vector, such as `:aliases` and `:project/info` when the it
-leads to a `deps.edn` map.
-After interpretation it can be used to fine-tune or use the results, such as
+|`::type`|`::source` must evaluate to|
+|:--|:--|
+|`:deps-edn`|Any map that contains an `:aliases` entry|
+|`:deps-edn-file`|A string representing the path to a `deps.edn` file|
+|`:deps-edn-rsrc`|A string representing the path to a `deps.edn` resource file|
+
+The `::type` is also used to trigger additional logic before and after
+interpreting the `::source` vector. It is currently used to add additional
+elements to the `::source` vector, such as `:aliases` and `:project/info`
+once a `deps.edn` map is loaded.
+After interpretation it used to fine-tune or use the results, such as
 adding new keys to the options map that will be returned.
 
-For now there is no hook to handle additional `::type` or elements
-to the `::source` mini-DSL. The interpretation logic is hard-coded in the
+For now there is no hook to handle additional `::type` or tokens in the
+`::source` mini-DSL. The interpretation logic is hard-coded in the
 `fmjrey.project/read-source` function. Therefore the `::source` option can
 only be used to compose existing behavior, and an example of that can be
-found in the `fmjrey.project.buil/copy` function in order to support a
+found in the `fmjrey.project.build/copy` function in order to support a
 custom `deps.edn` path.
 
-Depending on interest and contributions the use of additional hooks
-will be considered, most likely using some additional options, multimethods,
+Depending on interest and contributions the addition of such hooks may
+be considered, most likely using some additional options, multimethods,
 protocols, or records. The former mechanism however should be preferred, as
 the others may not be available in all clojure derivatives, whereas map
 literals are a defining feature of clojure that is unlikely to be missing.
@@ -591,7 +638,7 @@ Convert some code into CLJC and add support for other clojure derivatives.
 
 Invoke a library API function from the command-line:
 
-    $ clojure -X fmjrey.project/foo :a 1 :b '"two"'
+    $ clojure -X fmjrey.project/project-info :fmjrey.project/verbose :very
     {:a 1, :b "two"} "Hello, World!"
 
 Run the project's tests (they'll fail until you edit them):
