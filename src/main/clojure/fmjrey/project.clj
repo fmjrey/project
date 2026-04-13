@@ -217,7 +217,8 @@
                                          (println "read-edn failed:"
                                                   (str t)))
                                        (or-reduced nil part
-                                                   (assoc opts ::cause (str t))))))
+                                                   (assoc opts ::cause (str t)))))
+                          (or-reduced part part opts))
                         (keyword? part) (or-reduced (get src part) part opts)
                         :else (or-reduced part part opts)))
                     [nil opts] source)
@@ -325,3 +326,7 @@
       (cond-> opts# ;;(if (map? ~lib-or-opts) ~lib-or-opts {})
         (nil? loader#) (assoc ::loader (caller-classloader))
         true (some-> read-project alias#)))))
+
+(defn info
+  ([] (info {}))
+  ([lib-or-opts] (project-info lib-or-opts)))
