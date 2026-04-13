@@ -28,8 +28,10 @@
 /classes
 **/target
 /src/main/resources/deps/
-/doc/Project-infoApplicability.md
-/doc/Project-infoLocations.md
-/doc/Project-infoNotes.md
+/doc/Project-info-locationsApplicability.md
+/doc/Project-info-locationsLocations.md
+/doc/Project-info-locationsNotes.md
 !/test-data/project3/project3-0.1.3.jar
 /test-data/project0/resources/deps/
+/.idea/
+/project.iml
