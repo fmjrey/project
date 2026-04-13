@@ -1,10 +1,53 @@
 # fmjrey/project
 
-Utility library to capture project info in `deps.edn`.
+Utility library to capture project info and retrieve it at runtime.
 
-**EXPERIMENTAL WORK IN PROGRESS**
+**WORK IN PROGRESS**
 
-## Rationale
+This library is in a pre-alpha state meaning the API is very likely to change.
+Although the remit of capturing and retrieving project info appears simple,
+the variety of ways in which clojure, and its derivatives beyond the JVM,
+handle dependencies, their distribution, and artifact creation introduces some
+complexity, and the need to offer flexibility and openness.
+
+## Library goals
+
+Below are the goals for this library:
+
+1. Initial focus is on capturing project info in `deps.edn` while allowing
+  for other file and format because other host languages may have well defined
+  ways to handle the same concern. Going beyond that initial focus largely
+  depends on interest and contributions (see the [Customization](#customization)
+  section).
+2. This library proposes some flexibility in the logic for retrieving project
+  info at runtime (see [Options](#options) and [Customization](#customization)
+  sections). It also provides the necessary logic and tools to prepare that
+  info during development and build time. On the JVM this consists in copying
+  the `deps.edn` file into a resource directory
+  (see [Use within build.clj](#use-within-buildclj)).
+3. There should be a clear distinction between the runtime and build time logic,
+  so as to not force a project to bring dependencies at runtime that are only
+  relevant during development (see [Usage](#usage) section).
+4. Use the same simple API for clojure on the JVM and its derivatives hosted
+  elsewhere. The macro `project-info` is proposed to be that simple entry point.
+  The reason it is a macro is because there may be logic to be run where the
+  call is made (e.g. getting the caller classloader). Additional functions are
+  provided for customization, diagnosis, and experimentation
+  (see [Usage](#usage) section).
+5. It should be possible for a library existing as a dependency in a dependent
+  project to retrieve its own project info as well as the info of the owning
+  project. To that end the use of a project/library identifier is essential.
+6. This library does not dictate what a project info is made of. It however
+  assumes it is a single map with a mandatory project/library identifier
+  under the `:id` key. The use of similar keys across languages is encouraged
+  where it makes sense, see
+  [`:project/info` alias entries](#projectinfo-alias-entries).
+7. This library should depend on a limited set of functionality and dependencies
+  and ideally have most of its logic in CLJC. At present it is written in `.clj`
+  files because its initial focus makes it rely on
+  [tools.deps.edn](https://github.com/clojure/tools.deps.edn).
+
+## Rationale and design considerations
 
 As the clojure CLI and build tools mature and become prevalent, the feature gap
 with the previous leiningen tool is diminishing. Capturing project metadata
@@ -23,8 +66,9 @@ direct dependency objects.
 A major hurdle at present is that neither are guaranteed to be present
 in a release artifact, certainly not `build.clj` as many projects don't need
 one, or even are required to name it so. The trend to use direct git coordinates
-may provide a way to access `deps.edn`, and in any case a jar does not usually
-contain the `deps.edn` unless it's copied in a resource directory before a build.
+may provide a way to access `deps.edn` but for now it does not. Moreover jar
+artifacts do not usually contain the `deps.edn` unless it's copied in a
+resource directory at build time.
 
 Still, having a well defined place to capture project metadata helps
 tremendously different uses cases, such as discovery and tooling.
@@ -47,9 +91,8 @@ In terms of design here are some important considerations:
    That being said, the most logical place for project data would be at the
    same level as `:paths` and `:deps` since these already capture data about
    a project. Even with an alias, there is no guarantee its name won't
-   conflict with other user aliases. Therefore the suggestion is to use a
-   default qualified alias, say `:project/info`, and allow for it to be
-   changed via some option.
+   conflict with other user aliases. Therefore this library uses the qualified
+   alias `:project/info`, and allows for it to be changed via some option.
 
 2. Q: How is this data going to be merged with root and user `deps.edn`?
 
@@ -82,6 +125,7 @@ In terms of design here are some important considerations:
    are available, which one is loaded?
 
    A: Load from project root first, and if not found try as a resource.
+   See the [Searched locations](#searched-locations) section.
 
 5. Q: How to ensure a library is loading its own `deps.edn` and not the one
    from another library or even from the dependent application?
@@ -99,16 +143,16 @@ In terms of design here are some important considerations:
    Source dependencies however should only have a `deps.edn` in project root
    since the resource copy is not supposed to be checked in. Moreover accessing
    resources is very much dependent on the classloading strategy which may vary
-   from one context to the other (e.g. uberjar, Spring, etc.). Nevertheless the
-   expectation for source dependencies is that there should always be a way to
-   load `deps.edn` from project root, though some experimentation is needed to
-   validate the most reliable way to do that.
+   from one context to the other (e.g. uberjar, web or app server, etc.).
+   Nevertheless the expectation for source dependencies is that there should
+   always be a way to load `deps.edn` from project root, though some
+   experimentation is needed to validate the most reliable way to do that.
+   See the [Applicability for each location](#applicability-for-each-location)
+   for some attempts to describe what's to be expected (feedback welcomed).
 
-This library is therefore an experiment to use `deps.edn` as the place where
-project data is captured into a new `:project/info` alias. It also provides
-a way to retrieve it at runtime from a jar by copying `deps.edn` into a resource
-directory. The library is written in a way that should make it reasonably easy
-to merge with [tools.deps.edn](https://github.com/clojure/tools.deps.edn).
+This library is therefore proposing to use `deps.edn` as the place where
+project data is captured into a new `:project/info` alias. It also provides a
+way to retrieve it at runtime by copying `deps.edn` into a resource directory.
 
 ## deps.edn :project/info alias
 
@@ -120,7 +164,7 @@ in a resource directory should not be edited and preferably not checked in.
 ### :project/info alias entries
 
 In `deps.edn`, project related data about the dependent side should be placed
-in a map under the `:project/info` alias, and containing the following entries:
+in a map under the `:project/info` alias, and may contain the following entries:
 
 - `:id`: a qualified symbol identifying the project, as expected under `:lib` by
         [write-pom](https://clojure.github.io/tools.build/clojure.tools.build.api.html#var-write-pom)
@@ -295,9 +339,9 @@ matching one is found.
   are checked. Returns a sequence of options maps augmented with various
   working keys and a `:project/info` entry when a matching id is found.
 
-For experimentation `print-project` and `print-searched-deps` offer exactly
-the same functionality as their above counterparts, except they print the
-locations where a matching project entry has been searched for.
+For convenience at the command line, `print-project` and `print-searched-deps`
+offer exactly the same functionality as their above counterparts, except they
+also print the locations where a matching project entry has been searched for.
 To also print the matching project entries add `:fmjrey.project/verbose :very`
 to the options map. Printing is in fact controlled by this option which is set
 to `true` by the printing functions (unless `:very` is passed).
@@ -306,8 +350,8 @@ A list of all possible options is detailed in the [Options](#options) section.
 
 ### Use within build.clj
 
-The most typical use within `build.clj` is to create tasks related to project
-versioning and release.
+The most typical use of project info within `build.clj` is to create tasks
+related to project versioning and release.
 
 The require entry should be as follows:
 
@@ -317,37 +361,33 @@ The require entry should be as follows:
 
 For convenience most of the public functions from the `fmjrey.project` namespace
 are also available in the `fmjrey.project.build` namespace, e.g. `read-project`,
-`searched-deps`, and their printing alternate are the same, no need to require
-`fmjrey.project`, and their above description also apply here.
+`searched-deps`, and their printing alternatives, therefore no need to also
+require `fmjrey.project`.
 One additional function however is available only in the `fmjrey.project.build`
 namespace:
 
 - `copy-deps`: copy the project root `deps.edn` to a resource directory.
   Options map must have a `:lib` entry in the format `groupId/artifactId`
   and an optional `:fmjrey.project/resdir` to specify the destination resource
-  directory (defaults to `"resources"`). The
-  [Current basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)
-  is checked for a custom project root and `deps.edn` path in order to determine
-  the path to the project `deps.edn` when not in the project root directory.
-  Return the options map unchanged.
-  **TODO:** add ability to also use `tools.deps.edn/project-deps-path` API
-   ([doc](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps-path))
-   so that `clojure.tools.deps.util.dir/with-dir` may be used to specify a
-   custom project directory to determine source and destination. This should be
-   controlled by an option. **What default behavior should this option have?**
+  directory (defaults to `"resources"`). Return the options map unchanged.
+  Internally this function uses the `tools.deps.edn/project-deps-path` API
+  ([doc](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps-path))
+  to determine the path to the project `deps.edn`. Consequently the function
+  `clojure.tools.deps.util.dir/with-dir` may be used to specify a
+  custom project directory where to find the project `deps.edn`.
 
 ### Use from clojure CLI
 
 Functions mentioned in the previous section can also be run using the clojure
-CLI with the -T option:
+CLI with the -T or -X option:
 
 ```
 # copy project deps.edn to the resource directory
 clojure -T:project copy-deps :lib myorg/mylib
 # read project deps.edn
-clojure -T:project read-project :lib myorg/mylib :fmjrey.project/verbose :very
+clojure -X:project read-project :lib myorg/mylib :fmjrey.project/verbose :very
 # list all searched locations
-clojure -T:project searched-deps :lib myorg/mylib
+clojure -X:project searched-deps :lib myorg/mylib
 ```
 
 ## Searched locations
@@ -360,21 +400,17 @@ By default project data is searched in the following locations in that order:
    ([doc](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)).
    This means `clojure.tools.deps.util.dir/with-dir` may be used to specify a
    custom project directory.
-5. Custom `deps.edn` location as per the runtime current basis, using a file path
-   created with the `:dir` and/or `:project` entries from `:basis-config`
-   ([doc](https://clojure.org/reference/deps_edn#basis_config)), and loaded as
-   a file then as a resource, unless it points to the default project  `deps.edn`
-6. `deps.edn` as a file then as a resource
-7. `/deps.edn` as a resource
-8. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
-9. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
+5. `deps.edn` as a file then as a resource
+6. `/deps.edn` as a resource
+7. `deps/<group-id>/<artifact-id>/deps.edn` as a resource
+8. `/deps/<group-id>/<artifact-id>/deps.edn` as a resource
 
 To change the searched locations and their order set the option
 `:fmjrey.project/search-in` to one of, or a vector of:
 
 - `:basis`: this corresponds to items 1 and 3 above
-- `:project`: this corresponds to items 4 to 7 above
-- `:resource`: this corresponds to items 8 and 9 above
+- `:project`: this corresponds to items 4 to 6 above
+- `:resource`: this corresponds to items 7 and 8 above
 
 For example to search only in the runtime basis:
 
@@ -383,33 +419,35 @@ For example to search only in the runtime basis:
   (project/project-info {:lib 'my.app/name
                          :fmjrey.project/search-in :basis}))
 ```
+### Applicability for each location
 
-The table below summarizes the applicability of each above location broken into
-the corresponding `::search-in` option value and internal `::type`.
+The table below summarizes the applicability of each above location along with
+their corresponding `::search-in`, `::source`, and `::type` option values.
+The description of these last 2 options can be found in the
+[Customization](#customization) section.
+
 Disclaimer: there isn't at present a test case for each row, meaning this table
 is made from the best knowledge of the author who would be happy to get
-feedback and experience reports. Certainly rows having a note abbreviated by U
+feedback and experience reports. Certainly rows having a note abbreviated by `U`
 are not expected to be applicable in most cases, but may in some, and should
 probably not be relied upon systematically unless it's the only option.
 In any case passing a library symbol as a `:lib` parameter is the best way to
 ensure more reliable results.
 To save space the table uses abbreviations that are explained further below.
 
-|#|Location|`::search-in`|as (`::type`)|Applicability|From|For|If|Notes|
-|:--|:--|:--|:--|:--|:--|:--|:--|:--|
-|1|[Current basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)|`:basis`|`:current-basis`|RUN, DEV|P, D|P|CLI, SRC|BA|
-|2|[Initial basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/initial-basis)|`:basis`|`:initial-basis`|RUN, DEV|P, D|P|CLI, SRC|BA|
-|3|[Current `:basis-config` `:project` map](https://clojure.github.io/clojure/clojure.java.basis-api.html)|`:basis`|`:edn`|RUN, DEV|P, D|P||CLI?|
-|4|[`clojure.tools.deps.edn/project-deps`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)|`:project`|`:edn`|RUN, DEV|P, D|P|SRC|WD|
-|5|[Custom `deps.edn` path from current basis](https://clojure.org/reference/deps_edn#basis_config)|`:project`|`:file`|RUN, DEV|P, D|P|SRC|BC, CLI?|
-|||`:project`|`:resource`|RUN|P|P||BC, CLI?, U, RO|
-|6|`deps.edn`|`:project`|`:file`|RUN, DEV|P, D|P|SRC||
-|||`:project`|`:resource`|RUN|P|P|JAR, UJAR|U, RO|
-|||`:project`|`:resource`|RUN|D|I|JAR, DSRC|U, RO|
-|7|`/deps.edn`|`:project`|`:resource`|RUN|P|P|JAR, UJAR|U, RO, RT|
-|||`:project`|`:resource`|RUN|D|I|JAR, DSRC|U, RO, RT|
-|8|`deps/<group-id>/<artifact-id>/deps.edn` |`:resource`|`:resource`|RUN|P, D|P, D|JAR, UJAR|RO|
-|9|`/deps/<group-id>/<artifact-id>/deps.edn` |`:resource`|`:resource`|RUN|P, D|P, D|JAR, UJAR|RO, RT|
+|#|Location|::source|`::search-in`|as (`::type`)|Applicability|From|For|If|Notes|
+|:--|:--|:--|:--|:--|:--|:--|:--|:--|:--|
+|1|[Current basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/current-basis)|`['current-basis]`|`:basis`|`:deps-edn`|RUN, DEV|P, D|P|CLI, SRC|BA|
+|2|[Initial basis](https://clojure.github.io/clojure/clojure.java.basis-api.html#clojure.java.basis/initial-basis)|`['initial-basis]`|`:basis`|`:deps-edn`|RUN, DEV|P, D|P|CLI, SRC|BA|
+|3|[Current `:basis-config` `:project` map](https://clojure.github.io/clojure/clojure.java.basis-api.html)|`['current-basis :basis-config :project]`|`:basis`|`:deps-edn`|RUN, DEV|P, D|P||CLI?|
+|4|[`clojure.tools.deps.edn/project-deps`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)|`['project-deps]`|`:project`|`:deps-edn`|RUN, DEV|P, D|P|SRC|WD|
+|5|`deps.edn`|`["deps.edn"]`|`:project`|`:deps-edn-file`|RUN, DEV|P, D|P|SRC||
+|||`["deps.edn"]`|`:project`|`:deps-edn-rsrc`|RUN|P|P|JAR, UJAR|U, RO|
+|||`["deps.edn"]`|`:project`|`:deps-edn-rsrc`|RUN|D|I|JAR, DSRC|U, RO|
+|6|`/deps.edn`|`["/deps.edn"]`|`:project`|`:deps-edn-rsrc`|RUN|P|P|JAR, UJAR|U, RO, RT|
+|||`["/deps.edn"]`|`:project`|`:deps-edn-rsrc`|RUN|D|I|JAR, DSRC|U, RO, RT|
+|7|`deps/<group-id>/<artifact-id>/deps.edn` |`["deps/<group-id>/<artifact-id>/deps.edn"]`|`:resource`|`:deps-edn-rsrc`|RUN|P, D|P, D|JAR, UJAR|RO|
+|8|`/deps/<group-id>/<artifact-id>/deps.edn` |`["/deps/<group-id>/<artifact-id>/deps.edn"]`|`:resource`|`:deps-edn-rsrc`|RUN|P, D|P, D|JAR, UJAR|RO, RT|
 
 **Applicability abbreviations**
 
@@ -427,13 +465,12 @@ This table explains the applicability abbreviations with meaning to its right.
 
 |Abr.|Mnemonic|Notes|
 |:--|:--|:--|
-|BA|Basis|The runtime basis is set as a JVM system property by the clojure CLI host-specific scripts, and is cached on disk ([doc](https://clojure.org/reference/clojure_cli#cache_dir)).|
+|BA|Basis|[The runtime basis is set as a JVM system property by the clojure CLI host-specific scripts, and is cached on disk (doc).](https://clojure.org/reference/clojure_cli#cache_dir)|
 |CLI?|CLI needed?|The clojure CLI does not seem to be needed for this, this case is more likely set programmatically (e.g. testing, custom config, etc.)|
-|WD|With Dir|The function `clojure.tools.deps.util.dir/with-dir` ([doc](https://cljdoc.org/d/org.clojure/tools.deps.edn/0.9.22/api/clojure.tools.deps.util.dir#with-dir)) may be used to specify a custom project directory.|
+|WD|With Dir|[The function `clojure.tools.deps.util.dir/with-dir` (doc) may be used to specify a custom project directory.](https://cljdoc.org/d/org.clojure/tools.deps.edn/0.9.22/api/clojure.tools.deps.util.dir#with-dir)|
 |U|Unlikely|Unlikely to be found unless explicitely added/copied in a resource root dir. Not really recommended but some existing project may have done so.|
-|RO|Runtime Only|Intended for runtime use only. May also be picked up at dev/ops time, but other locations should be preferred and searched first.|
-|BC|Basis Config|A file path is created with the `:dir` and/or `:project` entries from `:basis-config` ([doc](https://clojure.org/reference/deps_edn#basis_config)), and searched as a file then as a resource, unless it points to the default project `deps.edn`.|
-|RT|RooT|A leading `/** designates the root of the classpath which may make sense in some environments and classloaders.|
+|RO|Runtime Only|Intended for runtime use only. A resource `deps.edn` may be picked up at dev/ops time, but other locations should be preferred and searched first.|
+|RT|RooT|A leading `/` designates the root of the classpath which may make sense in some environments and classloaders.|
 
 **NOTE** An Excel spreadsheet was used to build the tables above is
 in this repository under `doc`. To convert it to markdown tables use the
@@ -466,7 +503,45 @@ All API entry points can take an options map with the following optional entries
 - `:fmjrey.project/resdir`: only used by `copy-deps` to specify the destination
   resource directory. Defaults to `"resources"`.
 
-## Development (TODO Update this template generated section)
+More internally used options are explained in the
+[Customization](#customization) section.
+
+## Customization
+
+The options described in the [Options](#options) section should be the
+first entry point for customization. In addition to these, this library
+uses an internal "mini-DSL" for describing a single project info
+location that is captured as a vector in the `::source` option entry.
+It is a vector of symbols and keywords that respectively evaluate to some
+retrieval logic and a map value. It is interpreted from left to right as if
+its elements were threaded with `->`.
+
+The table in the [Searched locations](searched-locations) gives the initial
+`::source` vector used for each location. It also gives the internal
+`::type` of the `::source`, or more precisely the type of value that should
+result from applying the corresponding `::source` vector.
+
+The `::type` is also used to specify additional logic before and after
+interpreting the `::source` vector. Before interpretation it can add
+additional elements to the `::source` vector, such as `:aliases` and
+`:project/info` when the it leads to a `deps.edn` map.
+Afterwards it can be used to fine-tune the results returned from
+interpretation, such as adding new keys to the options map that will
+be returned.
+
+For now there is no hook to handle additional `::type` or elements
+to the `::source` mini-DSL. The interpretation logic is hard-coded in the
+`fmjrey.project/read-source` function. Therefore the `::source` option can
+only be used to compose existing behavior, and an example of that can be
+found in the `fmjrey.project.buil/copy` function in order to support a
+custom `deps.edn` path.
+
+Depending on interest and contributions the use of additional hooks
+will be considered, most likely using some additional options and/or
+multimethods. The former mechanism however should be preferred, as
+multimethods may not be available in all clojure derivatives (?).
+
+## Development
 
 Invoke a library API function from the command-line:
 
@@ -475,7 +550,11 @@ Invoke a library API function from the command-line:
 
 Run the project's tests (they'll fail until you edit them):
 
-    $ clojure -T:build test
+    $ clojure -M:test**
+
+**THE REST OF THIS SECTION WAS GENERATED BY THE TEMPLATE**
+
+**TODO Update it!**
 
 Run the project's CI pipeline and build a JAR (this will fail until you edit the tests to pass):
 

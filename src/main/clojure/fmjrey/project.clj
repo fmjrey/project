@@ -1,6 +1,6 @@
 (ns fmjrey.project
   (:import [java.lang StringBuilder]
-           [java.io File])
+           [java.io File Reader])
   (:require [clojure.string :as str]
             [clojure.pprint :as pp]
             [clojure.java.io :as io]
@@ -66,7 +66,7 @@
   (cond-> opts
     (nil? alias) (assoc ::alias default-alias)))
 
-(defn readable-file
+(defn available-file
   [f]
   (try
     (let [ff (io/file f)]
@@ -92,104 +92,55 @@
        (interpose File/separator)
        (apply str)))
 
-(defn basis-project-deps
-  [{verbose ::verbose}]
-  (let [basis (basis/current-basis)
-        custd (get-in basis [:basis-config :dir])
-        custp (get-in basis [:basis-config :project] :standard)
-        custd? (and (string? custd)
-                    (not (re-matches #"^(?:\.[/\\]?)?$" custd)))
-        custp? (and (string? custp)
-                    (not (re-matches #"^(?:\.?[/\\])?deps\.edn$" custp)))
-        filepath (cond
-                   (and custd? custp?)       (str (io/file custd custp))
-                   (and (not custd?) custp?) custp
-                   (and custd? (not custp?)) (str (io/file custd "deps.edn"))
-                   :else                     "deps.edn")]
-    (when verbose
-      (when custd?
-        (println "Found custom project path in current basis:" custd))
-      (when custp?
-        (println "Found custom edn path in current basis:" custp)))
-    [custd custp filepath]))
-
-(defn- start-opts
-  [{:keys [lib ::search-in]
-    :or {search-in [:basis :project :resource]}
+(defn- start-sources
+  [{:keys [lib ::search-in ::loader]
+    :or {search-in [:basis :project :deps-edn-rsrc]}
     :as opts}]
   (let [search-in (if (keyword? search-in) [search-in] search-in)
-        nocl (dissoc opts ::loader)
-        [_ custp filepath] (basis-project-deps opts)
-        project-deps-path (deps/project-deps-path)
-        project-deps (deps/project-deps)]
+        nocl (dissoc opts ::loader)]
     (reduce
      (fn [result in]
        (case in
          :basis
-         (cond-> result
-           true         (conj (assoc nocl ::type :current-basis))
-           true         (conj (assoc nocl ::type :initial-basis))
-           (map? custp) (conj (assoc nocl ::type :edn ::edn custp)))
+         (conj result
+               (assoc nocl ::source ['current-basis] ::type :deps-edn)
+               (assoc nocl ::source ['initial-basis] ::type :deps-edn)
+               (assoc nocl ::source ['current-basis :basis-config :project]
+                      ::type :deps-edn))
          :project
-         (cond-> result
-           project-deps
-           (conj (assoc nocl ::type :edn ::edn project-deps
-                        ::path project-deps-path))
-           (not= "deps.edn" filepath)
-           (conj (assoc nocl ::type :file ::path filepath))
-           true
-           (conj (assoc nocl ::type :file ::path "deps.edn")))
-         :resource
-         (cond-> result
-           lib (conj (assoc opts ::type :resource
-                            ::path (resource-filename lib))))))
+         (conj result
+               (assoc nocl ::source ['project-deps] ::type :deps-edn)
+               (assoc nocl ::source ["deps.edn"] ::type :deps-edn-file))
+         :deps-edn-rsrc
+         (let [p  (and lib (resource-filename lib))
+               rp (and lib (str File/separator p))]
+           (cond-> result
+             p  (cond->
+                 true   (conj (assoc nocl ::source [p] ::type :deps-edn-rsrc))
+                 loader (conj (assoc opts ::source [p] ::type :deps-edn-rsrc)))
+             rp (cond->
+                 true   (conj (assoc nocl ::source [rp] ::type :deps-edn-rsrc))
+                 loader (conj (assoc opts ::source [rp] ::type :deps-edn-rsrc)))))))
      [] search-in)))
 
-(defn- expand-opts
-  [{:keys [::loader] :as opts}]
-  (->> (start-opts opts)
-       ;; expand file to resource
-       (mapcat (fn [{type ::type :as o}]
-                 (if (= :file type)
-                   [o (assoc o ::type :resource)]
-                   [o])))
-       ;; expand resources with leading / or \
-       (mapcat (fn [{:keys [::type  ::path] :as o}]
-                 (if (and path (= type :resource))
-                   [o (assoc o ::path (str File/separator path))]
-                   [o])))
-       ;; expand with optional classloader if provided
-       (mapcat (fn [{type ::type :as o}]
-                 (case type
-                   :file     [(dissoc o ::loader)]
-                   :resource (cond-> [(dissoc o ::loader)]
-                               loader (conj o))
-                   [o])))
-       ;; throw if nothing to do
-       (#(if (seq %)
-           %
-           (throw (ex-info "Nothing to do, possible causes: ::search-in is empty or set to :resource without a :lib entry" opts))))))
-
 (defn- print-opts
-  [{:keys [lib ::path ::type ::readable? ::verbose ::loader ::alias]
+  [{:keys [lib ::source ::type ::available? ::cause ::verbose ::loader ::alias]
     :or {alias default-alias}
     :as opts}]
   (let [project (get opts alias)
-        edn? (= :edn type)
         match? (and project (or (nil? lib) (= (:id project) lib)))
         print-project? (and match? (= :very verbose))
-        basis? (#{:current-basis :initial-basis} type)
         msg (as-> (StringBuilder.) $
               (cond-> $
-                type (.append (-> type name str/upper-case))
-                path (.append " ")
-                path (.append path)
-                (not edn?) (.append ", ")
-                loader (.append "with caller classloader, ")
-                readable? (.append "found and readable")
-                (not (or readable? basis? edn?)) (.append "not found or readable")
-                (and basis? (not project)) (.append "not found")
-                (and basis? project) (.append "found")
+                type (.append "> ")
+                type (.append (name type))
+                type (.append " ")
+                source (.append (str source))
+                available? (.append " available")
+                (not available?) (.append " not available")
+                cause (.append " (")
+                cause (.append cause)
+                cause (.append ")")
                 ;;
                 )
               (if match?
@@ -202,8 +153,8 @@
                     lib (.append ", mismatching id ")
                     lib (.append (:id project)))
                   (cond-> $
-                    readable? (.append ", no ")
-                    readable? (.append (str alias)))))
+                    available? (.append ", no ")
+                    available? (.append (str alias)))))
               (if print-project? (.append $ ":") $)
               (.append $ "\n")
               (if print-project?
@@ -220,29 +171,59 @@
     (flush)
     opts))
 
-(defn read-edn
-  [{:keys [::type ::path ::loader ::edn ::verbose ::alias]
+(defn read-source
+  [{:keys [::source ::type ::loader ::verbose ::alias]
     :or {alias default-alias}
     :as opts}]
-  (let [io? (#{:file :resource} type)
-        file-or-res (when io?
-                      (case type
-                        :file     (readable-file path)
-                        :resource (if loader
-                                    (io/resource path loader)
-                                    (io/resource path))))
-        edn (case type
-              :edn edn
-              (:file :resource) (when file-or-res
-                                  (with-open [rdr (io/reader file-or-res)]
-                                    (deps/read-edn rdr opts)))
-              :current-basis (basis/current-basis)
-              :initial-basis (basis/initial-basis)
-              (throw (ex-info (str "Invalid type " type) opts)))
-        project (get-in edn [:aliases alias])
+  (let [source (cond-> source
+                 (= :deps-edn-file type) (conj 'file 'read-edn)
+                 (= :deps-edn-rsrc type) (conj (if loader 'resource-cl 'resource)
+                                               'read-edn)
+                 (#{:deps-edn-file :deps-edn-rsrc :deps-edn} type)
+                 (conj :aliases alias))
+        opts (assoc opts ::source source)
+        or-reduced (fn [val part opts]
+                     (if (nil? val)
+                       (let [cause (str (format "nil %s" part)
+                                        (when-let [c (::cause opts)]
+                                          (str " (" c ")")))]
+                         (reduced [nil (assoc opts ::cause cause)]))
+                       [val opts]))
+        [src opts] (reduce
+                    (fn [[src opts] part]
+                      (cond
+                        (symbol? part)
+                        (case part
+                          current-basis  (or-reduced (basis/current-basis)
+                                                     part opts)
+                          initial-basis  (or-reduced (basis/initial-basis)
+                                                     part opts)
+                          project-deps   (or-reduced (deps/project-deps)
+                                                     part opts)
+                          file (or-reduced (available-file src)
+                                           part
+                                           (assoc opts ::path src))
+                          (resource resource-cl)
+                          (or-reduced (if loader
+                                        (io/resource src loader)
+                                        (io/resource src))
+                                      part (assoc opts ::path src))
+                          read-edn (try
+                                     (with-open [rdr (io/reader src)]
+                                       (or-reduced (deps/read-edn rdr opts)
+                                                   part opts))
+                                     (catch Throwable t
+                                       (when verbose
+                                         (println "read-edn failed:"
+                                                  (str t)))
+                                       (or-reduced nil part
+                                                   (assoc opts ::cause (str t))))))
+                        (keyword? part) (or-reduced (get src part) part opts)
+                        :else (or-reduced part part opts)))
+                    [nil opts] source)
         opts (cond-> opts
-               io? (assoc ::readable? (some? file-or-res))
-               project (assoc alias project))]
+               true (assoc ::available? (some? src))
+               src  (assoc alias src))]
     (if verbose
       (print-opts opts)
       opts)))
@@ -260,28 +241,23 @@
 (defn- print-summary
   [{:keys [lib ::verbose ::alias] :or {alias default-alias}} matching-opts]
   (let [opts-list (if (map? matching-opts)
-                     [matching-opts]
-                     matching-opts)
-        count (count opts-list)]
+                    [matching-opts]
+                    matching-opts)
+        count (count opts-list)
+        sources (if (> count 1) "sources" "source")]
     (when verbose
       (if (zero? count)
         (if lib
-          (print "No matching deps.edn found with id" lib)
-          (print "No deps.edn found with" alias))
+          (print "No matching source found with id" lib)
+          (print "No source found with" alias))
         (do (if lib
-              (print "Found" count "matching deps.edn with id" lib)
-              (print "Found" count "matching deps.edn with" alias))
+              (print "Found" count "matching" sources "with id" lib)
+              (print "Found" count "matching" sources "with" alias))
             (when (= :very verbose)
               (print " in:")
-              (doseq [{:keys [::type ::path ::loader]} opts-list]
+              (doseq [{:keys [::type ::source]} opts-list]
                 (println)
-                (print "  ")
-                (if path
-                  (do (print path "(as" (name type))
-                      (when (and loader (= :resource type))
-                        (print "with caller classloader"))
-                      (print ")"))
-                  (print (name type)))))))
+                (print " " (name type) source)))))
       (newline)))
   matching-opts)
 
@@ -301,9 +277,9 @@
   (->> opts
        (valid-opts? "read-project")
        print-header
-       expand-opts
+       start-sources
        unchunk
-       (map read-edn)
+       (map read-source)
        (map validate-project-info)
        (some matching?)
        (print-summary opts)
@@ -318,8 +294,8 @@
   (let [searched (->> opts
                       (valid-opts? "searched-deps")
                       print-header
-                      expand-opts
-                      (map read-edn)
+                      start-sources
+                      (map read-source)
                       (map validate-project-info))]
     (->> searched
          (filter matching?)
