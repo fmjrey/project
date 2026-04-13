@@ -516,18 +516,18 @@ It is a vector of symbols and keywords that respectively evaluate to some
 retrieval logic and a map value. It is interpreted from left to right as if
 its elements were threaded with `->`.
 
-The table in the [Searched locations](searched-locations) gives the initial
-`::source` vector used for each location. It also gives the internal
-`::type` of the `::source`, or more precisely the type of value that should
-result from applying the corresponding `::source` vector.
+The earlier [location applicability table](applicability-for-each-location)
+gives for each location the initial `::source` vector. It also gives the
+internal `::type` of the `::source`, or more precisely the type of value that
+should result from applying the corresponding `::source` vector.
 
 The `::type` is also used to specify additional logic before and after
-interpreting the `::source` vector. Before interpretation it can add
-additional elements to the `::source` vector, such as `:aliases` and
-`:project/info` when the it leads to a `deps.edn` map.
-Afterwards it can be used to fine-tune the results returned from
-interpretation, such as adding new keys to the options map that will
-be returned.
+interpreting the `::source` vector. For example before interpretation it can
+set the scene by changing the working directory, or add additional elements to
+the `::source` vector, such as `:aliases` and `:project/info` when the it
+leads to a `deps.edn` map.
+After interpretation it can be used to fine-tune or use the results, such as
+adding new keys to the options map that will be returned.
 
 For now there is no hook to handle additional `::type` or elements
 to the `::source` mini-DSL. The interpretation logic is hard-coded in the
@@ -537,9 +537,55 @@ found in the `fmjrey.project.buil/copy` function in order to support a
 custom `deps.edn` path.
 
 Depending on interest and contributions the use of additional hooks
-will be considered, most likely using some additional options and/or
-multimethods. The former mechanism however should be preferred, as
-multimethods may not be available in all clojure derivatives (?).
+will be considered, most likely using some additional options, multimethods,
+protocols, or records. The former mechanism however should be preferred, as
+the others may not be available in all clojure derivatives, whereas map
+literals are a defining feature of clojure that is unlikely to be missing.
+
+## TODOs
+
+Below are some work items remaining before some proper release:
+
+#### TODO Testing
+
+More tests are needed, and in particular following the gridline of cases
+outlined in the [location applicability table](applicability-for-each-location).
+An initial test framework with test projects inside the `test-data` folder
+is in place, but such fixture requires launching the clojure CLI externally,
+which is rather costly if done for each test case.
+
+A more appropriate logic would be to have the code in these test projects
+run their own test cases and aggregate back into this project testing.
+For now there is some scaffolding that can help:
+
+- Each test project has the same code for invoking a function either in its
+  own context, or by delegation in another test project added as a dependency.
+- The test code in this project has reproduced a simple version of the clojure
+  [protocol](https://clojure.org/reference/clojure_cli#function_protocol)
+  to programmatically invoke tools or functions externally via the clojure CLI.
+  On the caller side it unwraps the envelope created by the callee side.
+  In clojure these are respectively implemented in
+  [`tools.deps`](https://github.com/clojure/clojure/blob/clojure-1.12.4/src/clj/clojure/tools/deps/interop.clj#L41)
+  and the `exec.jar` from the clojure CLI which code seems to be
+  [here](https://github.com/clojure/brew-install/blob/1.12.4/src/main/clojure/clojure/run/exec.clj#L52).
+  However this clojure feature only works for invoking a project's own tools at
+  runtime, and not another project tool or function.
+
+#### TODO Documentation
+
+Add documentation in the form of docstrings. This README is the only
+form of documentation at present, as it started to be written before any
+code, playing the role of a specification. Once the API is reasonably
+stable proper docstrings should be added.
+
+#### TODO Release artifact
+
+A library jar on clojars and some source dependency version mentioned in
+this README.
+
+#### TODO Support some clojure derivatives
+
+Convert some code into CLJC and add support for other clojure derivatives.
 
 ## Development
 
