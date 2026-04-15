@@ -300,7 +300,7 @@ in order to define a var to capture the `:project/info` alias map, .e.g:
 ```
 
 The locations where project data is searched for are detailed in the
-[Searched locations](searched-locations) section.
+[Searched locations](#searched-locations) section.
 The search logic stops and returns the first project data found with an `:id`
 matching the symbol given as single argument, or given under the `:lib` entry
 within an options map also passed as single argument:
@@ -490,7 +490,7 @@ All API entry points can take an options map with the following optional entries
   - `:project`: the project root
   - `:resource`: the resource directory
   
-  See the [Searched locations](searched-locations) section for more details.
+  See the [Searched locations](#searched-locations) section for more details.
   Defaults to `[:basis :project :resource]`.
 - `:fmjrey.project/alias`: the alias name under which project info is captured,
   which is also used as the key for storing the matching project data in the
@@ -541,9 +541,9 @@ Here are how literals are handled:
   a string to be interpreted in the next step as a path to a `deps.edn` file.
 - Keywords are applied as a function to the previous result in order to
   retrieve a map value.
-- Symbols are interpreted in a `case` statement (no `eval`!) to apply
-  specific logic. In case of an unknown symbol it starts a new threading,
-  ignoring the previous result and passing itself to the next step.
+- Symbols are interpreted in a big `case` statement to apply specific logic.
+  In case of an unknown symbol it starts a new threading, ignoring the
+  previous result and passing itself to the next step.
   Below is a table of currently interpreted symbols:
   
   |Symbol|Triggered logic|
@@ -557,7 +557,7 @@ Here are how literals are handled:
   |`read-edn`|[`clojure.java.io/reader` + `clojure.tools.deps.edn/read-edn`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps)|
 
 
-The earlier [location applicability table](applicability-for-each-location)
+The earlier [location applicability table](#applicability-for-each-location)
 gives for each location the initial `::source` vector. It also gives the
 internal `::type` of the `::source`, or more precisely the type of value that
 should result from interpreting the corresponding `::source` vector.
@@ -580,14 +580,26 @@ For now there is no hook to handle additional `::type` or tokens in the
 `::source` mini-DSL. The interpretation logic is hard-coded in the
 `fmjrey.project/read-source` function. Therefore the `::source` option can
 only be used to compose existing behavior, and an example of that can be
-found in the `fmjrey.project.build/copy` function in order to support a
-custom `deps.edn` path.
+found in the `fmjrey.project.build/copy` function in order to get the
+`deps.edn` path calculated by
+[`project-deps-path`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps-path)
+(which works off the working directory set by
+[with-dir](https://github.com/clojure/tools.deps.edn/blob/v0.9.22/src/main/clojure/clojure/tools/deps/util/dir.clj#L40),
+meaning custom deps setup such as polyfills or monorepos can be supported by
+calling that `with-dir` function before this library).
 
 Depending on interest and contributions the addition of such hooks may
-be considered, most likely using some additional options, multimethods,
-protocols, or records. The former mechanism however should be preferred, as
-the others may not be available in all clojure derivatives, whereas map
-literals are a defining feature of clojure that is unlikely to be missing.
+be considered, most likely using some additional options since multimethods,
+protocols, or records, may not be available in all clojure derivatives,
+whereas map literals are a defining feature of clojure that is unlikely to be
+missing.
+
+One addition to the mini-DSL for `::source` that is likely to be useful is to
+include some capabilities for calling existing clojure tooling functions such
+as the ones in [`tools.deps.edn`](https://clojure.github.io/tools.deps.edn/)
+without requiring specific options. Considering symbols as references to vars
+to be resolved at runtime can be a security concern, unless this is restricted
+to some well-defined namespaces.
 
 ## TODOs
 
@@ -595,18 +607,20 @@ Below are some work items remaining before some proper release:
 
 #### TODO Testing
 
-More tests are needed, and in particular following the gridline of cases
-outlined in the [location applicability table](applicability-for-each-location).
+More tests are needed, and in particular following the cases outlined in the
+[location applicability table](#applicability-for-each-location).
 An initial test framework with test projects inside the `test-data` folder
 is in place, but such fixture requires launching the clojure CLI externally,
 which is rather costly if done for each test case.
 
 A more appropriate logic would be to have the code in these test projects
-run their own test cases and aggregate back into this project testing.
-For now there is some scaffolding that can help:
+run their own test cases and aggregate them back into this project testing.
+There is some scaffolding that can help:
 
 - Each test project has the same code for invoking a function either in its
   own context, or by delegation in another test project added as a dependency.
+  This is to enable testing when this project functions are called from both
+  the owning project code and from a dependency code.
 - The test code in this project has reproduced a simple version of the clojure
   [protocol](https://clojure.org/reference/clojure_cli#function_protocol)
   to programmatically invoke tools or functions externally via the clojure CLI.
@@ -616,7 +630,7 @@ For now there is some scaffolding that can help:
   and the `exec.jar` from the clojure CLI which code seems to be
   [here](https://github.com/clojure/brew-install/blob/1.12.4/src/main/clojure/clojure/run/exec.clj#L52).
   However this clojure feature only works for invoking a project's own tools at
-  runtime, and not another project tool or function.
+  runtime, and not another project or dependency tool or function.
 
 #### TODO Documentation
 
@@ -638,7 +652,7 @@ Convert some code into CLJC and add support for other clojure derivatives.
 
 Invoke a library API function from the command-line:
 
-    $ clojure -X fmjrey.project/project-info :fmjrey.project/verbose :very
+    $ clojure -X fmjrey.project/info :fmjrey.project/verbose :very
     {:a 1, :b "two"} "Hello, World!"
 
 Run the project's tests (they'll fail until you edit them):
