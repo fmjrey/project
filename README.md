@@ -509,7 +509,7 @@ More internally used options are explained in the
 ## Customization
 
 The options described in the [Options](#options) section should be the
-first entry point for customization. In addition to these, more refined
+first entry points for customization. In addition to these, more refined
 customization can be achieved with the `::source` option that is used
 internally as a "mini-DSL" for describing a single project info location.
 
@@ -522,6 +522,9 @@ cases.
 Exposing it as a customization feature may offer all the advantages DSLs
 can offer, notably a declarative approach, but also all the drawbacks in
 terms of abuse and potential frustrations with its narrow scope.
+It does offer some level of flexibility to deal with non-standard project
+configurations, as well as other files and formats for capturing project
+info that additional hosting platforms may already use.
 Nevertheless it's being presented here to elicit feedback on its
 relevance and possible usage.
 
@@ -594,12 +597,33 @@ protocols, or records, may not be available in all clojure derivatives,
 whereas map literals are a defining feature of clojure that is unlikely to be
 missing.
 
-One addition to the mini-DSL for `::source` that is likely to be useful is to
-include some capabilities for calling existing clojure tooling functions such
-as the ones in [`tools.deps.edn`](https://clojure.github.io/tools.deps.edn/)
-without requiring specific options. Considering symbols as references to vars
-to be resolved at runtime can be a security concern, unless this is restricted
-to some well-defined namespaces.
+### Security considerations
+
+Considering the recent increase in supply chain attacks, we should be extra
+careful not to augment the risk surface. The limitations of using a very simple
+`::source` mini-DSL may lead to the temptation of increasing its expressiveness.
+This is exactly how the risk surface can be increased if not careful.
+
+In particular, one obvious addition would be to interpret symbols as references
+to vars to be resolved at runtime. This increases the attack surface by
+providing a way to execute arbitrary code provided externally, ultimately
+pointing to the level of trust we can have on that code, and the mechanisms to
+bring it into the execution context.
+
+We could restrict this feature to standard clojure tooling namespaces such as
+[`clojure.tools.deps.edn`](https://clojure.github.io/tools.deps.edn/) and
+[`clojure.tools.build.api`](https://clojure.github.io/tools.build/).
+The former is already required by this library in all cases, so it should not
+expand the risk surface. The second however isn't, unless within build code.
+So can something in non-build code fill the gap and parade as the build API?
+Certainly one should prefer the use of
+[`resolve`](https://clojuredocs.org/clojure.core/resolve) over
+[`requiring-resolve`](https://clojuredocs.org/clojure.core/requiring-resolve)
+so as to not go beyond what's already required at runtime.
+
+Overall, if this mini-DSL remains an official way to customize the behavior of
+retrieving project info, we should strive to keep it simple and secure.
+As mentioned earlier, it is explained here to elicit feedback and debate.
 
 ## TODOs
 
