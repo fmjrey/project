@@ -23,14 +23,12 @@
                      "--lint" "src/test/clojure"]}
 
   ;; CLI use
-  :project {:paths ["src" "resources"]
-            :deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}
-                   org.clojure/tools.deps.edn {:mvn/version "0.9.22"}}
+  :project {:extra-deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}}
             :exec-args {:fmjrey.project/verbose true}
             :ns-default fmjrey.project.build}
 
   ;; build and task use
-  :build {:paths ["src" "resources"]
+  :build {:paths ["src/main/clojure" "src/main/resources"]
           :deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}
                  org.clojure/tools.deps.edn {:mvn/version "0.9.22"}
                  slipset/deps-deploy {:mvn/version "0.2.2"}}

@@ -12,6 +12,7 @@
 (def read-source project/read-source)
 (def matching? project/matching?)
 (def validate-project-info project/validate-project-info)
+(def valid-opts? project/valid-opts?)
 (def read-project project/read-project)
 (def print-project project/print-project)
 (def searched-deps project/searched-deps)
@@ -21,20 +22,23 @@
   [{:keys [lib ::project/verbose ::project/resdir]
     :or {resdir "resources"}
     :as opts}]
-  (let [{alias ::project/alias :as opts} (project/valid-opts? "copy-deps" opts)
-        src (deps/project-deps-path)
-        opts (-> opts
+  (let [src (or (deps/project-deps-path)
+                (throw (ex-info "tools.deps.edn/project-deps-path returned nil"
+                                opts)))
+        opts (-> (valid-opts? "copy-deps" opts)
                  (assoc ::project/type   :deps-edn-file
                         ::project/source [src])
                  read-source
-                 validate-project-info)
+                 validate-project-info
+                 matching?
+                 (or (throw
+                       (ex-info
+                         (format ":lib (%s) does not match :id in %s"
+                               lib src)
+                       opts))))
+        id (some->> opts ::project/alias (get opts) :id)
+        lib (or lib id (throw (ex-info (format "No :id found in %s" src) opts)))
         dst (->> lib resource-filename (io/file resdir) str)]
-    (when-not (matching? opts)
-      (throw
-       (ex-info
-        (format "Provided :lib (%s) does not match project deps.edn :id (%s)"
-                lib (some-> opts alias :id))
-        opts)))
     (when verbose
       (println "Copying" src "to" dst))
     (copy-file {:src src :target dst})
