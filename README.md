@@ -29,10 +29,10 @@ Below are the goals for this library:
   so as to not force a project to bring dependencies at runtime that are only
   relevant during development (see [Usage](#usage) section).
 4. Use the same simple API for clojure on the JVM and its derivatives hosted
-  elsewhere. The macro `project-info` is proposed to be that simple entry point.
-  The reason it is a macro is because there may be logic to be run where the
-  call is made (e.g. getting the caller classloader). Additional functions are
-  provided for customization, diagnosis, and experimentation
+  elsewhere. The function `info` and macro `project-info` are proposed to be
+  that simple entry point. The reason for having a macro is because there may be
+  logic to be run where the call is made (e.g. getting the caller classloader).
+  Additional functions are there for customization, diagnosis, and experimentation
   (see [Usage](#usage) section).
 5. It should be possible for a library existing as a dependency in a dependent
   project to retrieve its own project info as well as the info of the owning
@@ -290,27 +290,52 @@ In all cases the require entry should be as follows for runtime use:
 [fmjrey.project :as project]
 ```
 
-#### Runtime `project-info` macro
+#### Runtime `project-info` macro and `info` function
 
 The easiest way to load project data is to use the macro `project/project-info`
-in order to define a var to capture the `:project/info` alias map, .e.g:
+or the `project/info` function in order to define a var to capture the
+`:project/info` alias map, .e.g:
 
 ```clojure
-(def app-info (project/project-info 'my.app/name))
+(def app-info (project/project-info)) ;; the macro sets the classloader option
+```
+or
+```clojure
+(def app-info (project/info))
 ```
 
-The locations where project data is searched for are detailed in the
-[Searched locations](#searched-locations) section.
-The search logic stops and returns the first project data found with an `:id`
-matching the symbol given as single argument, or given under the `:lib` entry
-within an options map also passed as single argument:
+The `project-info` macro and `info` function have an identical signature and
+represent the main API to retrieve a project information. Other functions provide
+additional features that are mostly useful during development and experimentation.
+The reason for having a macro on top of the function is to enable some logic to
+be executed at the call site, namely the retrieval of the caller classloader
+which can be useful for some use cases (TODO: validate this in testing).
+The macro is therefore a convenience that avoids the manual setting of the
+`:fmjrey.project/loader` [option](#options).
+
+Both macro and function take an optional argument which can be a single library
+symbol in the format `groupId/artifactId`, or an [options map](#options) which
+may also specify a library symbol under the `:lib` key:
 
 ```clojure
-(def app-info (project/project-info {:lib 'my.app/name}))
+(def app-info (project/project-info 'lib/name))
 ```
+or
+
+```clojure
+(def app-info (project/project-info {:lib 'lib/name}))
+```
+
+Without any argument the owning project info is retrieved. With a library symbol
+given as a single argument or within the options map, it may be possible under
+certain conditions for a dependency to retrieve its own project info rather than
+the info from the dependent project.
+The locations where project data is searched for, and their applicability, are
+detailed in the [Searched locations](#searched-locations) section.
+
 When no symbol is given to `project-info` it can only search project data for the
 running application in its runtime basis and project root directory and not in
-the project specific resource directory. It will also return the first project
+a resource directory. It will also return the first project
 data found regardless of its `:id`. For a more deterministic outcome it is best
 to provide a symbol argument, and certainly necessary in the case of a library
 code wishing to load its own project data instead of the dependent project data.
@@ -318,14 +343,14 @@ code wishing to load its own project data instead of the dependent project data.
 The search logic also tries to load a resource without specifying any
 classloader, and then tries with an optional classloader if given with the
 `:fmjrey.project/loader` option. The `project-info` macro adds the caller
-classloader automatically, if not already provided, while other non-macro API
-functions detailed below don't.
+classloader automatically, if not already provided, while other API functions
+detailed below don't.
 
 A list of all possible options is detailed in the [Options](#options) section.
 
-#### Runtime functions
+#### Additional runtime functions
 
-In addition to the `project-info` macro the following functions take an options
+In addition to the info macro and function the following functions take an options
 map that may or may not have a `:lib` entry in the format `groupId/artifactId`.
 They apply the same search logic as explained above for the macro, and return
 the given option map possibly augmented with a `:project/info` entry if a
@@ -388,7 +413,7 @@ clojure -T:project copy-deps
 Copying deps.edn to resources/deps/my/app/name/deps.edn
 
 # read project deps.edn
-clojure -X:project read-project
+clojure -X:project info
 Searching for project info in alias :project/info
 > deps-edn [current-basis :aliases :project/info] available, found id my.app/name
 Found 1 matching source with :project/info

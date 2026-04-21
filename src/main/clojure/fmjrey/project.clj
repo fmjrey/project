@@ -66,7 +66,7 @@
   (cond-> opts
     (nil? alias) (assoc ::alias default-alias)))
 
-(defn available-file
+(defn readable-file
   [f]
   (try
     (let [ff (io/file f)]
@@ -200,7 +200,7 @@
                                                      part opts)
                           project-deps   (or-reduced (deps/project-deps)
                                                      part opts)
-                          file (or-reduced (available-file src)
+                          file (or-reduced (readable-file src)
                                            part
                                            (assoc opts ::path src))
                           (resource resource-cl)
@@ -311,22 +311,21 @@
   []
   `(.getClassLoader (class (proxy [Object] []))))
 
+(defn info
+  ([] (info {}))
+  ([lib-or-opts]
+   (let [{:keys [::alias]
+          :or {alias default-alias}
+          :as opts} (cond
+                      (map? lib-or-opts) lib-or-opts
+                      (nil? lib-or-opts) {}
+                      (valid-lib? "info" lib-or-opts) {:lib lib-or-opts})]
+     (some-> opts read-project alias))))
+
 (defmacro project-info
   ([] `(project-info {}))
   ([lib-or-opts]
-   `(let [{lib# :lib alias# ::alias loader# ::loader
-           :or {alias# default-alias}
-           :as opts#} (cond
-           (map? ~lib-or-opts)
-           ~lib-or-opts
-           (nil? ~lib-or-opts)
-           {}
-           (valid-lib? "project-info" ~lib-or-opts)
-           {:lib ~lib-or-opts})]
-      (cond-> opts# ;;(if (map? ~lib-or-opts) ~lib-or-opts {})
-        (nil? loader#) (assoc ::loader (caller-classloader))
-        true (some-> read-project alias#)))))
-
-(defn info
-  ([] (info {}))
-  ([lib-or-opts] (project-info lib-or-opts)))
+   `(let [opts# (if (and (map? ~lib-or-opts) (nil? (::loader ~lib-or-opts)))
+                  (assoc ~lib-or-opts ::loader (caller-classloader))
+                  ~lib-or-opts)]
+      (info opts#))))

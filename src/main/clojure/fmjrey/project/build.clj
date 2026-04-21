@@ -12,6 +12,9 @@
 (def read-source project/read-source)
 (def matching? project/matching?)
 (def validate-project-info project/validate-project-info)
+(defn info
+  ([] (info {}))
+  ([lib-or-opts] (project/project-info lib-or-opts)))
 (def valid-opts? project/valid-opts?)
 (def read-project project/read-project)
 (def print-project project/print-project)
