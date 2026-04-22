@@ -10,6 +10,13 @@ the variety of ways in which clojure, and its derivatives beyond the JVM,
 handle dependencies, their distribution, and artifact creation introduces some
 complexity, and the need to offer flexibility and openness.
 
+The difficulty with a hosted language is that the ecosystem it is hosted on most
+likely already has tooling and formats for handling dependencies and project info.
+There is however some value in having a uniform access to these, even if the data
+comes from host-specific mechanisms. For example in polyglot projects it may be
+useful to have access to all dependencies with version and license info to
+analyze potential security and licensing issues.
+
 ## Library goals
 
 Below are the goals for this library:
@@ -18,7 +25,7 @@ Below are the goals for this library:
   for other file and format because other host languages may have well defined
   ways to handle the same concern. Going beyond that initial focus largely
   depends on interest and contributions (see the [Customization](#customization)
-  section).
+  and [Feedback to/from the core team](#todo-get-feedback-from-clojure-core-team-and-provide-input) sections).
 2. This library proposes some flexibility in the logic for retrieving project
   info at runtime (see [Options](#options) and [Customization](#customization)
   sections). It also provides the necessary logic and tools to prepare that
@@ -700,6 +707,54 @@ Add documentation in the form of docstrings. This README is the only
 form of documentation at present, as it started to be written before any
 code, playing the role of a specification. Once the API is reasonably
 stable proper docstrings should be added.
+
+#### TODO Get feedback from clojure core team and provide input
+
+This library overlaps with some intended work the clojure core team is pursuing
+or planning to pursue. In particular, there is an intent to make the clojure
+tooling more useful to, and support, different clojure dialects. This probably
+depends on the overall strategy for clojure evolution in relation to the various
+dialects it has generated. At the time of writing these workgroups are barely
+starting and won't provide definite feedback except some early hints.
+Nevertheless feedback from the core team will be essential for the evolution and
+stabilization of this library, which still needs to provide a sensible way to
+handle project info until such time there is an official one.
+
+Until then here is the following feedback to the core team:
+
+- **Provide jar dependencies access to their own `deps.edn`**: this would
+  probably be a new feature in the jar building logic.
+  JIRA [TDEPS-277](https://clojure.atlassian.net/browse/TDEPS-277)
+  and [TDEPS-278](https://clojure.atlassian.net/browse/TDEPS-278) hint at copying
+  `deps.edn` as a resource file, and this project follows that idea.
+- **Provide source dependencies access to their own `deps.edn`**: this would be
+  a new feature to be provided by the clojure deps runtime. The alternative is
+  using the `deps.edn` resource copy, but this would force having that copy in
+  source control, which opens a can of worms in terms of sync issues.
+- **Provide a way to invoke any project tool, not just one's own**: the test code
+  in this project has reproduced a simple version of the clojure
+  [protocol](https://clojure.org/reference/clojure_cli#function_protocol)
+  to programmatically invoke tools or functions externally via the clojure CLI.
+  This is because the clojure feature only works for invoking a project's own
+  tools at runtime, and not another project tool or function.
+
+The last two items hint at a more general feature for the clojure runtime to
+direct some of its logic to any project directory, not just its own, or one of
+its dependency. This could be a generalization of the `with-dir` function found
+in `tools.deps.edn`
+([source](https://github.com/clojure/tools.deps.edn/blob/v0.9.22/src/main/clojure/clojure/tools/deps/util/dir.clj#L40)).
+
+#### TODO Stabilize the API
+
+To support this library evolution towards more clojure dialects, the API and
+terminology needs to be more generic and not specific to the JVM.
+While the clojure core team will most likely be expanding the use of `deps.edn`,
+it is not guaranteed that a project info is best placed in that file. For
+integration purposes it may make more sense to leave it in a host-specific place.
+Also dependencies may be coming from the host ecosystem itself, meaning not
+written in a clojure dialect, and therefore without any `deps.edn` file.
+Therefore the current use of the word `deps` in this project API may be too
+specific and some review is likely to be needed at some point.
 
 #### TODO Release artifact
 
