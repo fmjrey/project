@@ -739,15 +739,15 @@ Until then here is the following feedback to the core team:
   tools at runtime, and not another project tool or function.
 
 The last two items hint at a more general feature for the clojure runtime to
-direct some of its logic to any project directory, not just its own, or one of
-its dependency. This could be a generalization of the `with-dir` function found
+direct some of its logic to any project directory, or one of its dependency, and
+not just its own. This could be a generalization of the `with-dir` function found
 in `tools.deps.edn`
 ([source](https://github.com/clojure/tools.deps.edn/blob/v0.9.22/src/main/clojure/clojure/tools/deps/util/dir.clj#L40)).
 
 #### TODO Stabilize the API
 
-To support this library evolution towards more clojure dialects, the API and
-terminology needs to be more generic and not specific to the JVM.
+For this library evolution towards supporting more clojure dialects, the API and
+terminology needs to be more generic and not specific to clojure on the JVM.
 While the clojure core team will most likely be expanding the use of `deps.edn`,
 it is not guaranteed that a project info is best placed in that file. For
 integration purposes it may make more sense to leave it in a host-specific place.
