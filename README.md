@@ -239,13 +239,10 @@ This library can be used in 3 different ways:
 2. within your project `build.clj` or equivalent
 3. as a clojure CLI command with the -T or -X options
 
-Two separate namespaces are offered, `fmjrey.project` for runtime use, and
-`fmjrey.project.build` for build and CLI usage, and the latter refers to some
-functions in the first for convenience. Only the latter requires
-`io.github.clojure/tools.build` as a dependency for copying the `deps.edn` file
-to the resource directory. However to not load the build API when using the
-former, `io.github.clojure/tools.build` is not declared as a dependency by this
-project, and therefore must be declared as a dependency in yours, as illustrated
+A single namespace `fmjrey.project` contains the API for runtime, build, and CLI
+usage. However to not load the clojure build API when using it at runtime,
+`io.github.clojure/tools.build` is not declared as a dependency by this project,
+and therefore must be declared as a dependency in yours, as illustrated
 by the sample `deps.edn` below:
 
 ```clojure
@@ -257,12 +254,13 @@ by the sample `deps.edn` below:
                   :license {:id "EPL-2.0"
                   :name "Eclipse Public License 2.0"
                   :url "https://www.eclipse.org/legal/epl-2.0"}}
-   ;; CLI use
-   :project {:deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}
+   ;; CLI use with -X
+   :project {:deps {;; tools.build should be declared here to use copy-deps
+                    io.github.clojure/tools.build {:mvn/version "0.10.12"}
                     fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
              :exec-args {:fmjrey.project/verbose true} ; otherwise no printing
-             :ns-default fmjrey.project.build}
-   ;; build and task use
+             :ns-default fmjrey.project}
+   ;; build and task use with -T
    :build {:deps {;; tools.build must be declared here
                   io.github.clojure/tools.build {:mvn/version "0.10.12"}
                   fmjrey/project {:git/tag "TAG" :git/sha "SHA"}}
@@ -272,7 +270,7 @@ by the sample `deps.edn` below:
 Note how the above `deps.edn` defines 2 aliases that both declare
 `io.github.clojure/tools.build` as a dependency:
 
-- `:project`: for easier CLI use as it defaults to the `fmjrey.project.build`
+- `:project`: for easier CLI use as it defaults to the `fmjrey.project`
   namespace and adds the verbose option (otherwise nothing is printed),
 - `:build`: for use in `build.clj`.
 
@@ -343,8 +341,7 @@ code wishing to load its own project data instead of the dependent project data.
 The search logic also tries to load a resource without specifying any
 classloader, and then tries with an optional classloader if given with the
 `:fmjrey.project/loader` option. The `project-info` macro adds the caller
-classloader automatically, if not already provided, while other API functions
-detailed below don't.
+classloader automatically, if not already provided.
 
 A list of all possible options is detailed in the [Options](#options) section.
 
@@ -362,11 +359,11 @@ matching one is found.
   for a matching project entry. This is mostly for experimentation and testing
   so as to check the different combinations of paths, files, and resources that
   are checked. Returns a sequence of options maps augmented with various
-  working keys and a `:project/info` entry when a matching id is found.
+  working keys and a `:project/info` entry when found.
 
 For convenience at the command line, `print-project` and `print-searched-deps`
-offer exactly the same functionality as their above counterparts, except they
-also print the locations where a matching project entry has been searched for.
+offer exactly the same functionality as their above counterparts, except they also
+print to `stderr` the locations where a matching project entry is searched for.
 To also print the matching project entries add `:fmjrey.project/verbose :very`
 to the options map. Printing is in fact controlled by this option which is set
 to `true` by the printing functions (unless `:very` is passed).
@@ -376,20 +373,9 @@ A list of all possible options is detailed in the [Options](#options) section.
 ### Use within build.clj
 
 The most typical use of project info within `build.clj` is to create tasks
-related to project versioning and release.
-
-The require entry should be as follows:
-
-```clojure
-[fmjrey.project.build :as project]
-```
-
-For convenience most of the public functions from the `fmjrey.project` namespace
-are also available in the `fmjrey.project.build` namespace, e.g. `read-project`,
-`searched-deps`, and their printing alternatives, therefore no need to also
-require `fmjrey.project`.
-One additional function however is available only in the `fmjrey.project.build`
-namespace:
+related to project versioning and release. For the latter the following function
+is needed to create a copy of a project `deps.edn` to a library specific resource
+directory:
 
 - `copy-deps`: copy the project root `deps.edn` to a resource directory.
   Options map may have a `:lib` entry in the format `groupId/artifactId`
@@ -635,7 +621,7 @@ For now there is no hook to handle additional `::type` or tokens in the
 `::source` mini-DSL. The interpretation logic is hard-coded in the
 `fmjrey.project/read-source` function. Therefore the `::source` option can
 only be used to compose existing behavior, and an example of that can be
-found in the `fmjrey.project.build/copy` function in order to get the
+found in the `fmjrey.project/copy` function in order to get the
 `deps.edn` path calculated by
 [`project-deps-path`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps-path)
 (which works off the working directory set by

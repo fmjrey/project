@@ -22,6 +22,31 @@
    (not-empty (reduce-kv #(if (= ns-str (namespace %2)) %1 (assoc %1 %2 %3))
                          {} m))))
 
+(defonce ^:private nl (System/getProperty "line.separator"))
+
+(defn- newlinerr
+  "print a new line to *err*"
+  [& msgs]
+  (binding [*out* *err*
+            *print-readably* nil]
+    (pr nl)
+    (flush)))
+
+(defn- printerr
+  "print to *err*"
+  [& msgs]
+  (binding [*out* *err*
+            *print-readably* nil]
+    (pr (str/join " " msgs))))
+
+(defn- printerrln
+  "println to *err*"
+  [& msgs]
+  (binding [*out* *err*
+            *print-readably* nil]
+    (pr (str (str/join " " msgs) nl))
+    (flush)))
+
 (defn valid-lib?
   ([op lib] (valid-lib? op lib {}))
   ([op lib opts]
@@ -37,10 +62,10 @@
   ([op search-in opts]
    (or (specs/valid-search-in? search-in)
        (throw
-        (ex-info
-         (format "Invalid search-in in %s: got %s, expected one of, or a vector of #{:basis :project :resource}"
-                 op search-in)
-         opts)))))
+         (ex-info
+           (format "Invalid search-in in %s: got %s, expected one of, or a vector of #{:basis :project :resource}"
+                   op search-in)
+           opts)))))
 
 (defn valid-alias?
   ([op alias] (valid-alias? op alias {}))
@@ -167,7 +192,7 @@
                              $))
                 $)
               (str $))]
-    (print msg)
+    (printerr msg)
     (flush)
     opts))
 
@@ -214,8 +239,8 @@
                                                    part opts))
                                      (catch Throwable t
                                        (when verbose
-                                         (println "read-edn failed:"
-                                                  (str t)))
+                                         (printerrln "read-edn failed:"
+                                                     (str t)))
                                        (or-reduced nil part
                                                    (assoc opts ::cause (str t)))))
                           (or-reduced part part opts))
@@ -235,8 +260,8 @@
     :as opts}]
   (when verbose
     (if lib
-      (println "Searching for id" (str lib) "in alias" alias)
-      (println "Searching for project info in alias" alias)))
+      (printerrln "Searching for id" (str lib) "in alias" alias)
+      (printerrln "Searching for project info in alias" alias)))
   opts)
 
 (defn- print-summary
@@ -249,17 +274,17 @@
     (when verbose
       (if (zero? count)
         (if lib
-          (print "No matching source found with id" lib)
-          (print "No source found with" alias))
+          (printerr "No matching source found with id" lib)
+          (printerr "No source found with" alias))
         (do (if lib
-              (print "Found" count "matching" sources "with id" lib)
-              (print "Found" count "matching" sources "with" alias))
+              (printerr "Found" count "matching" sources "with id" lib)
+              (printerr "Found" count "matching" sources "with" alias))
             (when (= :very verbose)
-              (print " in:")
+              (printerr " in:")
               (doseq [{:keys [::type ::source]} opts-list]
-                (println)
-                (print " " (name type) source)))))
-      (newline)))
+                (printerrln)
+                (printerr " " (name type) source)))))
+      (newlinerr)))
   matching-opts)
 
 (defn matching?
@@ -329,3 +354,29 @@
                   (assoc ~lib-or-opts ::loader (caller-classloader))
                   ~lib-or-opts)]
       (info opts#))))
+
+(defn copy-deps
+  [{:keys [lib ::verbose ::resdir]
+    :or {resdir "resources"}
+    :as opts}]
+  (let [copy-file (requiring-resolve 'clojure.tools.build.api/copy-file)
+        src (or (deps/project-deps-path)
+                (throw (ex-info "tools.deps.edn/project-deps-path returned nil"
+                                opts)))
+        opts (-> (valid-opts? "copy-deps" opts)
+                 (assoc ::type   :deps-edn-file
+                        ::source [src])
+                 read-source
+                 validate-project-info
+                 matching?
+                 (or (throw
+                      (ex-info
+                       (format ":lib (%s) does not match :id in %s" lib src)
+                       opts))))
+        id (some->> opts ::alias (get opts) :id)
+        lib (or lib id (throw (ex-info (format "No :id found in %s" src) opts)))
+        dst (->> lib resource-filename (io/file resdir) str)]
+    (when verbose
+      (printerrln "Copying" src "to" dst))
+    (copy-file {:src src :target dst})
+    opts))

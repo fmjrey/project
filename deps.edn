@@ -25,7 +25,7 @@
   ;; CLI use with -X
   :project {:extra-deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}}
             :exec-args {:fmjrey.project/verbose true}
-            :ns-default fmjrey.project.build}
+            :ns-default fmjrey.project}
 
   ;; build and task use with -T
   :build {:paths ["src/main/clojure" "src/main/resources"]

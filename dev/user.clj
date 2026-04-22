@@ -16,7 +16,6 @@
   (:require
    ;; REPL Workflow
    [fmjrey.project :as project]
-   [fmjrey.project.build :as build]
    [mulog-events]                     ; Event Logging
    [com.brunobonacci.mulog :as mulog] ; Global context & Tap publisher
    ;;[portal]
@@ -177,7 +176,7 @@
            ;;::project/resdir "myres"
            ;;
            }
-          build/copy-deps))
+          project/copy-deps))
 
   #_()) ; End of rich comment
 
