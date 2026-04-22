@@ -280,9 +280,9 @@ Note how the above `deps.edn` defines 2 aliases that both declare
 
 Having access to project data can be useful for printing or logging information
 at runtime, e.g. a header string containing name and version upon startup.
-Most situations will only need the `project-info` macro to retrieve a project
-info. Additional functions are provided for more customized behavior and
-experimentation.
+Most situations will only need the `project-info` macro or `info` function
+to retrieve a project info. Additional functions are provided for more
+customized behavior and experimentation.
 
 In all cases the require entry should be as follows for runtime use:
 
