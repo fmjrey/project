@@ -1,5 +1,7 @@
 # fmjrey/project
 
+    fmjrey/project {:git/tag "TAG" :git/sha "SHA"}
+
 Utility library to capture project info and retrieve it at runtime.
 
 **WORK IN PROGRESS**
@@ -59,7 +61,7 @@ Below are the goals for this library:
 As the clojure CLI and build tools mature and become prevalent, the feature gap
 with the previous leiningen tool is diminishing. Capturing project metadata
 such as name and version remains however unhandled, and there aren't many places
-where it can.
+where it can be.
 
 [Tools.build](https://clojure.org/guides/tools_build) offers APIs that help
 with versioning, and thus may seem like a good place to start. Except projects
@@ -391,8 +393,10 @@ directory:
   Internally this function uses the `tools.deps.edn/project-deps-path` API
   ([doc](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps-path))
   to determine the path to the project `deps.edn`. Consequently the function
-  `clojure.tools.deps.util.dir/with-dir` may be used to specify a
-  custom project directory where to find the project `deps.edn`.
+  [`clojure.tools.deps.util.dir/with-dir`](https://github.com/clojure/tools.deps.edn/blob/v0.9.22/src/main/clojure/clojure/tools/deps/util/dir.clj#L40),
+  may be used to specify a custom project directory where to find the
+  project `deps.edn` to copy, supporting custom setup such as polyfills or
+  monorepos.
 
 ### Use from clojure CLI
 
@@ -629,7 +633,7 @@ For now there is no hook to handle additional `::type` or tokens in the
 `fmjrey.project/read-source` function. Therefore the `::source` option can
 only be used to compose existing behavior, and an example of that can be
 found in the `fmjrey.project/copy` function in order to get the
-`deps.edn` path calculated by
+`deps.edn` path returned by
 [`project-deps-path`](https://clojure.github.io/tools.deps.edn/#clojure.tools.deps.edn/project-deps-path)
 (which works off the working directory set by
 [with-dir](https://github.com/clojure/tools.deps.edn/blob/v0.9.22/src/main/clojure/clojure/tools/deps/util/dir.clj#L40),
@@ -731,18 +735,19 @@ Until then here is the following feedback to the core team:
   a new feature to be provided by the clojure deps runtime. The alternative is
   using the `deps.edn` resource copy, but this would force having that copy in
   source control, which opens a can of worms in terms of sync issues.
-- **Provide a way to invoke any project tool, not just one's own**: the test code
-  in this project has reproduced a simple version of the clojure
+- **Provide a way to invoke externally any function from any project**:
+  the testing of this project required an enhanced copy of the clojure
   [protocol](https://clojure.org/reference/clojure_cli#function_protocol)
-  to programmatically invoke tools or functions externally via the clojure CLI.
-  This is because the clojure feature only works for invoking a project's own
-  tools at runtime, and not another project tool or function.
+  to programmatically invoke functions in an external process via the clojure
+  CLI, see [fmjrey/invoke](https://github.com/fmjrey/invoke) for more details.
+  This is to ensure the function is executed with a runtime basis, working
+  directory, and `deps.edn`, that are different from the calling project, while
+  [`invoke-tool`](https://clojuredocs.org/clojure.tools.deps.interop/invoke-tool)
+  from clojure uses the runtime basis and `deps.edn` of the calling project.
 
-The last two items hint at a more general feature for the clojure runtime to
+The last two items may hint at a more general feature for the clojure runtime to
 direct some of its logic to any project directory, or one of its dependency, and
-not just its own. This could be a generalization of the `with-dir` function found
-in `tools.deps.edn`
-([source](https://github.com/clojure/tools.deps.edn/blob/v0.9.22/src/main/clojure/clojure/tools/deps/util/dir.clj#L40)).
+not just its own.
 
 #### TODO Stabilize the API
 
@@ -781,7 +786,7 @@ Invoke a library API function from the command-line:
       deps-edn [current-basis :aliases :project/info]
 
 
-Run the project's tests (they'll fail until you edit them):
+Run the project's tests:
 
     $ clojure -M:test
 

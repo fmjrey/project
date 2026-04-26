@@ -3,43 +3,22 @@
             [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.test :refer :all]
-            [clojure.java.process :as cjp]))
-
-;; The invoke functions below use clojure.tools.deps.interop/invoke-tool as
-;; a source of inspiration. If it could call other projects tools by changing
-;; the basis then most of the code below would disappear.
-(defn invoke
-  [base-strs opts]
-  (let [opts-strs (some->> opts seq flatten (map pr-str))
-        cmd-strs (concat base-strs opts-strs)
-        {:keys [preserve-envelope dir]
-         :or {preserve-envelope false dir "test-data/project0"}} opts]
-    (apply println "invoking" cmd-strs)
-    (let [proc (apply cjp/start {:dir dir} cmd-strs)
-          out (cjp/stdout proc)
-          err (cjp/stderr proc)]
-      (.waitFor proc)
-      (if-let [envelope (edn/read-string (slurp out))]
-        (if preserve-envelope
-          envelope
-          (let [{:keys [tag val]} envelope
-                parsed-val (edn/read-string val)]
-            (if (= :ret tag)
-              parsed-val
-              (throw (ex-info (:cause parsed-val) (or parsed-val {}))))))
-        (let [err-str (slurp err)
-              err-msg (if (= "" err-str) "Unknown error invoking Clojure CLI" err-str)]
-          (throw (ex-info err-msg
-                          {:command (str/join " " cmd-strs)
-                           :opts opts})))))))
+            [clojure.java.process :as cjp]
+            [fmjrey.invoke :as ext]))
 
 (defn project-invoke
   [from s & opts]
-  (invoke ["clojure" "-X:cli" "invoke" ":from" (pr-str from) ":s" (pr-str s)] opts))
-
-(defn build-invoke
-  [from task & opts]
-  (invoke ["clojure" "-T:build" (pr-str task)] (assoc opts :dir (str "test-data/project" from))))
+  (let [r (ext/invoke {:alias :cli
+                       :dir "test-projects/project0"
+                       :fn 'test.project0/invoke
+                       ;:debug true
+                       :preserve-envelope true
+                       :args (merge opts {:clojure.exec/err :capture
+                                          :fmjrey.project/verbose :very
+                                          :from (pr-str from)
+                                          :s (pr-str s)})})]
+    ;(-> r :err println)
+    (-> r :val edn/read-string)))
 
 (defn project-n-lib
   [n]
@@ -56,14 +35,13 @@
 #_(deftest project-n-test
   (testing "Scaffolding: test projects have correct number defined"
     (doseq [n (range 4)]
-      (is (= n (project-invoke n 'project-n) (build-invoke n 'number))))))
+      (is (= n (project-invoke n 'project-n))))))
 
 (deftest project-lib-test
   (testing "Scaffolding: test projects have correct number and lib defined"
     (doseq [n (range 4)]
       (is (= (symbol "test" (str "project" n))
-             (project-invoke n 'lib)
-             (build-invoke   n 'id))))))
+             (project-invoke n 'lib))))))
 
 (deftest lib-info-test
   (testing "Testing project-info with lib argument"

@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [test])
   (:require [clojure.tools.build.api :as b]
             [clojure.java.io :as io]
-            [fmjrey.project.build :as project]))
+            [fmjrey.project :as project]))
 
 (def project-n 0)
 (def lib (symbol "test" (str "project" project-n)))

@@ -31,7 +31,7 @@
 /doc/Project-info-locationsApplicability.md
 /doc/Project-info-locationsLocations.md
 /doc/Project-info-locationsNotes.md
-!/test-data/project3/project3-0.1.3.jar
-/test-data/project0/resources/deps/
+!/test-projects/project3/project3-0.1.3.jar
+/test-projects/project0/resources/deps/
 /.idea/
 /project.iml
