@@ -813,6 +813,17 @@ variables (requires the `ci` task be run first):
 
 Your library will be deployed to net.clojars.fmjrey/project on clojars.org by default.
 
+## Acknowledgments
+
+This library is based on the following software and contributions
+
+- **Rich Hickey and the clojure core team**: in an attempt to make this library
+  look like an extension of `tools.deps.edn`, some minor amount of code has
+  been copied from that library.
+- **[Macroz/tangle](https://github.com/Macroz/tangle)**: the single namespace
+  of that project has been duplicated and modified for generating graphs of the
+  programmatically created test projects.
+
 ## License
 
 Copyright © 2026 François Rey

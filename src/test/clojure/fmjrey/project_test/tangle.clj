@@ -103,7 +103,7 @@
   "Formats an id value in DOT format with proper escaping"
   [x]
   (cond
-    (string? x) (str \" (escape x) \")
+    (string? x)  x
     (keyword? x) (str \" (some-> (namespace x) (str \/)) (name x) \")
     :else (str x)))
 
@@ -128,8 +128,11 @@
 
 (defn- format-option
   "Formats a single option in DOT format"
-  [[k v]]
-  (str (name k) "=" (format-option-value v)))
+  [opts [k v]]
+  (str (name k) "=" (if (and (= :label k) (string? v)
+                             (#{:record :Mrecord} (:shape opts)))
+                      (str \" v \")
+                      (format-option-value v))))
 
 (defn- format-options
   "Formats a map of options in DOT format"
@@ -138,7 +141,7 @@
       (->> (if (:label opts)
              (update-in opts [:label] format-label)
              opts)
-           (map format-option)
+           (map (partial format-option opts))
            (interpose ", ")
            (apply str))))
 
@@ -203,7 +206,7 @@
 
            (when current-cluster
              (let [cluster-options (cluster->descriptor current-cluster)]
-               (apply str (interpose "\n" (map format-option cluster-options)))))
+               (apply str (interpose "\n" (map format-option cluster-options cluster-options)))))
 
            "\n"
 

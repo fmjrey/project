@@ -33,5 +33,7 @@
 /doc/Project-info-locationsNotes.md
 !/test-projects/project3/project3-0.1.3.jar
 /test-projects/project0/resources/deps/
+/test-projects/**/*.svg
+/test-projects/**/*.dot
 /.idea/
 /project.iml
