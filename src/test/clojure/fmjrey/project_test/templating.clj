@@ -169,11 +169,12 @@
                      (map (partial deps-nodes projects))
                      (mapcat next)
                      distinct)]
-     (cond
-       (string? name-or-node+deps)
-       (concat (cons name-or-node+deps nodes) nodes*)
-       (sequential? name-or-node+deps)
-       (if (empty nodes*) [(-> name-or-node+deps first)] nodes*)))))
+     (concat (cons (cond
+                     (string? name-or-node+deps) name-or-node+deps
+                     (sequential? name-or-node+deps)
+                     (-> name-or-node+deps first))
+                   nodes)
+             nodes*))))
 
 (defn deps-edges1
   [projects from-nodes+deps]
