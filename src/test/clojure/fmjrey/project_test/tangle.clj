@@ -1,10 +1,10 @@
 (ns fmjrey.project-test.tangle
+  "This namespace is a modified copy of the clojure graphviz library
+  [Macroz/tangle](https://github.com/Macroz/tangle)."
   (:require [clojure.string :as str]
             [clojure.java.shell :as sh]
             [clojure.java.io :as io]
             [hiccup.core :as h]))
-
-
 
 (def ^:private default-graph-options
   "Default options for a graph"

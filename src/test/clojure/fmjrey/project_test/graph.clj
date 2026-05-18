@@ -90,10 +90,10 @@
 
 (defn initial-projects
   "Return an initial empty tree of projects, with some reference data."
-  [depth dir]
+  [depth projects-dir]
   {:depth      depth
    :apps       [] ;; [name]
-   :by-name    {} ;; {name {:type t :name n :level l :count c :deps [name]
+   :by-name    {} ;; {name {:type t :name n :level l :node o :deps [name]
    ;;                       :deps-nodes {type [{:id name opts} [name]]}}}
    :by-level   [] ;; [[name]]
    :by-deps    {} ;; {name [name]}
@@ -109,15 +109,10 @@
            :shared-lib {:builders   lib-builders
                         :prefix     shared-lib-prefix
                         :counter    :lib-counter}}
-   :projects-dir (str dir)
-   :graph-dir    "graph"
+   :projects-dir (str projects-dir)
    :save-edn? true ; debugging help
    :save-dot? true ; debugging help
    })
-
-(defn apps
-  "Return the top level applications nodes = a vector of app names."
-  [projects] (projects :apps))
 
 (defn new-prjvs
   [projects level type]
@@ -139,6 +134,8 @@
    :builder builder})
 
 (defn deps-node-name
+  "Return the name (:id) of a graphviz node representing a set of deps of a
+  given type, these deps being of a project with given name and level."
   ([name level type]
    (case type
      (:app :lib)   (str deps-prefix separator name)
@@ -154,12 +151,13 @@
        "}"))
 
 (defn deps-node
-  [graph-dir name level type libvs]
+  "Return a new graphviz node (a map) that represents a set of deps (libvs)
+  of a given type, these deps being of a project with given name and level."
+  [name level type libvs]
   (let [deps-node-name (deps-node-name name level type)]
     {:id deps-node-name
      :shape :record
-     :label (deps-node-label libvs)
-     :URL (str (io/file graph-dir (str deps-node-name ".svg")))}))
+     :label (deps-node-label libvs)}))
 
 (defn add-deps-to-prjm
   [prjm type libvs deps-node]
@@ -169,16 +167,18 @@
         (update :deps-nodes assoc type [deps-node deps]))))
 
 (defn add-deps-to-tree
+  "Add to the projects tree a new set of deps (libvs) of a given type,
+  these deps being of a project with given name and level."
   [type level libvs projects name]
-  (let [deps-node (deps-node (projects :graph-dir) name level type libvs)
+  (let [{deps-node-name :id :as deps-node} (deps-node name level type libvs)
         deps (mapv first libvs)]
-    (-> projects
+    (-> (reduce #(assoc-in %1 [:by-name %2 :node] deps-node-name) projects deps)
         (update-in [:by-name name] add-deps-to-prjm type libvs deps-node)
         (update :by-deps (fn [by-deps]
                            (reduce (fn [by-deps dep]
                                      (update by-deps dep (fnil conj []) name))
                                    by-deps deps)))
-        (update :node+deps assoc (:id deps-node) [deps-node deps]))))
+        (update :node+deps assoc deps-node-name [deps-node deps]))))
 
 (defn add-prjm-to-tree
   [projects {:keys [type level name deps] :as prjm}]
@@ -247,7 +247,7 @@
 (defn deps-nodes
   "The nodes as expected by tangle (clojure graphviz library)."
   ([projects]
-   (mapcat (partial deps-nodes projects) (apps projects)))
+   (mapcat (partial deps-nodes projects) (projects :apps)))
   ([projects name-or-node+deps]
    (let [nodes+deps (cond
                       (string? name-or-node+deps)
@@ -269,32 +269,33 @@
 
 (defn deps-edges*
   [projects from-nodes+deps]
-  (for [[{from-node-name :id} from-deps] from-nodes+deps
+  (for [;
+        [{from-node-name :id} from-deps] from-nodes+deps
         from-dep from-deps
-        [{to-node-name :id} to-deps] (->nodes+deps projects from-dep)
-        to-dep to-deps]
-    (cons [(if (str/starts-with? to-node-name shared-deps-prefix)
-             from-node-name
-             (str from-node-name ":" from-dep))
-           to-node-name]
-          (deps-edges* projects (->nodes+deps projects to-dep)))))
+        [{to-node-name :id} :as to-node+deps] (->nodes+deps projects from-dep)
+        :let [edge [(if (str/starts-with? to-node-name shared-deps-prefix)
+                      from-node-name
+                      (str from-node-name ":" from-dep))
+                    to-node-name]
+              deps-edges* (apply concat (deps-edges* projects [to-node+deps]))]]
+    (conj deps-edges* edge)))
 
 (defn deps-edges
   "The edges as expected by tangle (clojure graphviz library)."
   ([projects] (reduce into #{} (map (partial deps-edges projects)
                                     (projects :apps))))
   ([projects name-or-node+deps]
-   (let [[name nodes+deps] (cond
-                             (string? name-or-node+deps)
-                             [name-or-node+deps
-                              (->nodes+deps projects name-or-node+deps)]
-                             (sequential? name-or-node+deps)
-                             [(-> name-or-node+deps first :id)
-                              [name-or-node+deps]])
-         to-node-names (mapv (comp :id first) nodes+deps)]
-     (into (into #{} (when (string? name-or-node+deps)
-                       (map #(vector name %1) to-node-names)))
-           (apply concat (deps-edges* projects nodes+deps))))))
+   (let [[from-name from-nodes+deps]
+         (cond
+           (string? name-or-node+deps)
+           [name-or-node+deps (->nodes+deps projects name-or-node+deps)]
+           (sequential? name-or-node+deps)
+           [(-> name-or-node+deps first :id) [name-or-node+deps]])
+         from-node-names (mapv (comp :id first) from-nodes+deps)
+         deps-edges* (deps-edges* projects from-nodes+deps)]
+     (cond-> #{}
+       (string? name-or-node+deps) (into (map #(vector from-name %1) from-node-names))
+       (seq deps-edges*) (into (apply concat deps-edges*))))))
 
 (defn deps-nodes-edges
   "The nodes and edges as expected by tangle (clojure graphviz library)."
@@ -304,7 +305,7 @@
 
 (defn prj-attrs
   "Graphviz attributes for a project graph."
-  [{:keys [graph-dir] :as projects}]
+  [{:keys [subdir] :as projects}]
   {:compound true
    :concentrate true
    :graph {:dpi 72
@@ -320,29 +321,36 @@
                                        projects))))
    :node->descriptor (fn [n]
                        (cond
-                         (map? n) n
+                         (map? n) (assoc n :URL (str (io/file subdir
+                                                              (str (:id n)
+                                                                   ".svg"))))
                          (string? n) {:id n
-                                      :URL (str (io/file graph-dir
+                                      :URL (str (io/file subdir
                                                          (str n ".svg")))}))})
 
 (defn app-attrs
   "Graphviz attributes for the graph of all projects."
-  [projects]
-  (update (prj-attrs projects) :graph merge {:nodesep 2 :ranksep 1.5}))
+  [{:keys [depth] :as projects}]
+  (update (prj-attrs projects) :graph merge {:nodesep (dec depth)
+                                             :ranksep depth}))
 
 (defn dot
   "Generate the dot language data as expected by graphviz."
-  ([projects]
-   (let [[nodes edges] (deps-nodes-edges projects)]
+  ([{:keys [projects-dir save-edn?] :as projects}]
+   (let [projects (assoc projects :subdir "graph")
+         [nodes edges] (deps-nodes-edges projects)]
+     (when save-edn?
+       (with-open [wr (io/writer (io/file projects-dir "nodes-edges.edn"))]
+         (.write wr (with-out-str (pp/pprint [nodes edges])))))
      (tg/graph->dot nodes edges (app-attrs projects))))
-  ([{:keys [projects-dir graph-dir save-edn?] :as projects} name-or-node+deps]
+  ([{:keys [projects-dir save-edn?] :as projects} name-or-node+deps]
    (let [[nodes edges] (deps-nodes-edges projects name-or-node+deps)
          name (cond
                 (sequential? name-or-node+deps)
                 (-> name-or-node+deps first :id)
                 (string? name-or-node+deps)
                 name-or-node+deps)
-         edn-file (io/file projects-dir graph-dir (str name ".edn"))
+         edn-file (io/file projects-dir "graph" (str name ".edn"))
          _ (io/make-parents edn-file)]
      (when save-edn?
        (with-open [wr (io/writer edn-file)]
@@ -351,30 +359,30 @@
 
 (defn gen-img
   "Generate graphviz images to disk."
-  ([{:keys [projects-dir] :as projects}]
+  ([{:keys [projects-dir save-dot?] :as projects}]
    (let [dot (dot projects)
          svg (tg/dot->image dot "svg")]
-     (when (projects :save-dot?)
+     (when save-dot?
        (io/copy dot (io/file projects-dir "projects.dot")))
      (io/copy svg (io/file projects-dir "projects.svg"))))
-  ([{:keys [projects-dir graph-dir save-dot?] :as projects} name-or-node+deps]
+  ([{:keys [projects-dir save-dot?] :as projects} name-or-node+deps]
    (let [dot (dot projects name-or-node+deps)
          svg (tg/dot->image dot "svg")
          name (cond
                 (string? name-or-node+deps) name-or-node+deps
                 (sequential? name-or-node+deps) (-> name-or-node+deps
                                                     first :id))
-         svg-file (io/file projects-dir graph-dir (str name ".svg"))]
+         svg-file (io/file projects-dir "graph" (str name ".svg"))]
      (io/make-parents svg-file)
      (io/copy svg svg-file)
      (when save-dot?
-       (io/copy dot (io/file projects-dir graph-dir (str name ".dot")))))))
+       (io/copy dot (io/file projects-dir "graph" (str name ".dot")))))))
 
 (defn gen-imgs
   "Generate graphviz images for all projects/deps nodes to disk."
   [projects]
   (gen-img projects)
-  (doseq [apps (apps projects)]
+  (doseq [apps (projects :apps)]
     (gen-img projects apps))
   (doseq [node+deps (->> projects :node+deps vals)]
     (gen-img projects node+deps)))
