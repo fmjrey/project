@@ -10,13 +10,15 @@
                            :url "https://www.eclipse.org/legal/epl-2.0"}}
 
   ;; clj -M:test
-  :test {:extra-paths ["src/test/clojure"]
+  :test {:extra-paths ["src/test/clojure" "src/test/resources"]
          :extra-deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}
                       io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}
                       org.clojure/math.combinatorics {:mvn/version "0.3.2"}
                       hiccup/hiccup {:mvn/version "1.0.5"}
                       ;;macroz/tangle {:mvn/version "0.2.2"}
-                      fmjrey/invoke {:local/root "../invoke"}}
+                      fmjrey/invoke {:local/root "../invoke"}
+                      io.github.seancorfield/deps-new
+                      {:git/tag "v0.12.1" :git/sha "883e82c"}}
          :main-opts ["-m" "cognitect.test-runner" "-d" "src/test/clojure"]
          :exec-fn cognitect.test-runner.api/test}
 

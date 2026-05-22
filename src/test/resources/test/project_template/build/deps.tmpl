@@ -1,0 +1,14 @@
+{:paths ["src" "resources"]
+ :deps {{deps.edn/deps}}
+ :tools/usage {:ns-default {{top/ns}}.{{main/ns}}}
+ :aliases
+ {:project/info {{project/info}}
+  :cli {:ns-default {{top/ns}}.{{main/ns}}}
+  ;; build and task use
+  :build
+  {:deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}
+          fmjrey/project {:local/root "../.."}}
+   :ns-default build}
+  ;; extra-aliases from template
+  {{deps.edn/extra-aliases}}
+  }}

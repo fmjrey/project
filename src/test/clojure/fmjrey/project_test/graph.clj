@@ -94,7 +94,8 @@
   {:depth      depth
    :apps       [] ;; [name]
    :by-name    {} ;; {name {:type t :name n :level l :node o :deps [name]
-   ;;                       :deps-nodes {type [{:id name opts} [name]]}}}
+   ;;                       :deps-nodes {type [{:id name opts} [name]]}
+   ;;                       :builder (:step)}}
    :by-level   [] ;; [[name]]
    :by-deps    {} ;; {name [name]}
    :node+deps  {} ;; {name [{:id name opts} [name]]}
@@ -113,6 +114,19 @@
    :save-edn? true ; debugging help
    :save-dot? true ; debugging help
    })
+
+(defn prjs-depth-first
+  [projects root-prj]
+  (tree-seq #(seq (get-in projects [:by-name %1 :deps]))
+            #(get-in projects [:by-name %1 :deps])
+            root-prj))
+
+(defn prjs-leaf-first
+  [projects root-prj]
+  (let [deps (get-in projects [:by-name root-prj :deps])]
+    (if (seq deps)
+      (concat (mapcat (partial prjs-leaf-first projects) deps) (list root-prj))
+      (list root-prj))))
 
 (defn new-prjvs
   [projects level type]

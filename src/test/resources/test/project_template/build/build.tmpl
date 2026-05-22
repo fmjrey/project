@@ -1,0 +1,98 @@
+(ns build
+  (:refer-clojure :exclude [test])
+  (:require [clojure.tools.build.api :as b]
+            [clojure.java.io :as io]
+            [fmjrey.project :as project]))
+
+(def project-name "{{project/name}}")
+(def lib 'test/{{artifact/id}})
+(def version "{{version}}")
+(def main '{{top/ns}}.{{main/ns}})
+(def target-dir "target")
+(def class-dir (str (io/file target-dir "classes")))
+
+(defn test "Run all the tests." [opts]
+  (let [basis    (b/create-basis {:aliases [:test]})
+        cmds     (b/java-command
+                  {:basis      basis
+                    :main      'clojure.main
+                    :main-args ["-m" "{{test-runner/main}}"]})
+        {:keys [exit]} (b/process cmds)]
+    (when-not (zero? exit) (throw (ex-info "Tests failed" {}))))
+  opts)
+
+(defn clean [_]
+  (b/delete {:path target-dir})
+  (b/delete {:path ".cpcache"}))
+
+(defn- pom-template [version]
+  [[:description "{{description}}"]
+   [:url "https://{{scm/domain}}/{{scm/user}}/{{scm/repo}}"]
+   [:licenses
+    [:license
+     [:name "{{license/name}}"]
+     [:url "{{license/url}}"]]]
+   [:developers
+    [:developer
+     [:name "{{developer}}"]]]
+   [:scm
+    [:url "https://{{scm/domain}}/{{scm/user}}/{{scm/repo}}"]
+    [:connection "scm:git:https://{{scm/domain}}/{{scm/user}}/{{scm/repo}}.git"]
+    [:developerConnection "scm:git:ssh:git@{{scm/domain}}:{{scm/user}}/{{scm/repo}}.git"]
+    [:tag (str "v" version)]]])
+
+(defn- base-opts [opts]
+  (assoc opts
+          :lib       lib
+          :basis     (b/create-basis {})
+          :class-dir class-dir
+          :src-dirs  ["src"]))
+
+(defn- jar-opts [opts]
+  (assoc (base-opts opts)
+	  :version   version
+          :jar-file  "{{project/jar}}"
+          :target    target-dir
+          :pom-data  (pom-template version)))
+
+(defn- uber-opts [opts]
+  (assoc (base-opts opts)
+         :main       main
+         :uber-file  "{{project/jar}}"
+         :ns-compile [main]))
+
+
+(defn copy-deps
+  [_]
+  (project/copy-deps {:lib lib}))
+
+(defn jar [opts]
+  (clean opts)
+  (let [opts (jar-opts opts)]
+    (println "\nWriting pom.xml...")
+    (b/write-pom opts)
+    (println "\nCopying deps.edn...")
+    (copy-deps opts)
+    (println "\nCopying source...")
+    (b/copy-dir {:src-dirs ["resources" "src"] :target-dir class-dir})
+    (println "\nBuilding JAR..." (:jar-file opts))
+    (b/jar opts))
+  opts)
+
+(defn install "Install the JAR locally." [opts]
+  (let [opts (jar-opts opts)]
+    (b/install opts))
+  opts)
+
+(defn uberjar [opts]
+  (clean opts)
+  (let [opts (uber-opts opts)]
+    (println "\nCopying deps.edn...")
+    (copy-deps opts)
+    (println "\nCopying source...")
+    (b/copy-dir {:src-dirs ["resources" "src"] :target-dir class-dir})
+    (println (str "\nCompiling " main "..."))
+    (b/compile-clj opts)
+    (println "\nBuilding JAR..." (:uber-file opts))
+    (b/uber opts))
+  opts)

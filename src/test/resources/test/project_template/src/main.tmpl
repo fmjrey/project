@@ -1,0 +1,62 @@
+(ns {{top/ns}}.{{main/ns}}
+  (:require [clojure.string :as str]
+            [fmjrey.project :as project]))
+
+(def project-name "{{project/name}}")
+(def lib '{{top/ns}}/{{main/ns}})
+
+;; Storing the result of calling the project-info macro so it can be
+;; inspected by test cases
+(def lib-info (project/project-info lib))
+(def app-info (project/info))
+
+;; Make some fmjrey.project functions available for testing
+(def read-project project/read-project)
+(def searched-deps project/searched-deps)
+
+;; Delegate execution to itself of a dependency project so that behavior can be
+;; tested by different part of the code (project or dependency) and under
+;; different circumstances (jar deps, source deps, uberjar, etc).
+;; In the code below "from" denotes where a symbol "s" should be evaluated.
+
+(defonce ^:private nl (System/getProperty "line.separator"))
+
+(defn- printerrln
+  "println to *err*"
+  [& msgs]
+  (binding [*out* *err*
+            *print-readably* nil]
+    (pr (str (str/join " " msgs) nl))
+    (flush)))
+
+(defn resolve-from
+  [from symbol-or-string]
+  (printerrln (format "resolve-from %s (%s) %s (%s)" (str from) (type from)
+                                                     (str  symbol-or-string)
+                                                     (type symbol-or-string)))
+  (let [from (symbol "test" (str from))
+        from-here? (= from lib)
+        s (if (string? symbol-or-string)
+            (symbol symbol-or-string)
+            symbol-or-string)
+        from-ns-str (str "test." (if from-here? project-name from))
+        s-ns-str (or (namespace s) from-ns-str)
+        s (if (qualified-symbol? s) s (symbol s-ns-str (name s)))
+        _ (printerrln "  s=" s)
+        run (if from-here? s (symbol from-ns-str "invoke"))
+        _ (printerrln "  run=" run)
+        resolved (requiring-resolve run)]
+    (when-not resolved
+      (throw (ex-info (format "%s: can't resolve %s" project-name run) {})))
+    (printerrln "  resolved=" resolved (some-> resolved type))
+    resolved))
+
+(defn invoke
+  [{:keys [from s]
+    :or {from project-name s 'lib-info}
+    :as opts}]
+  (println (format ";project-%s/invoke: :from=%s s=%s" project-name (str from) (str s)))
+  (let [resolved (resolve-from from s)
+        v (var-get resolved)
+        _ (printerrln (format "project-%s/invoke: v=%s (%s)" project-name (str v) (str (type v))))]
+    (if (fn? v) (v opts) v)))

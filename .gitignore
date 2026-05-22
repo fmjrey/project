@@ -31,12 +31,6 @@
 /doc/Project-info-locationsApplicability.md
 /doc/Project-info-locationsLocations.md
 /doc/Project-info-locationsNotes.md
-!/test-projects/project3/project3-0.1.3.jar
-/test-projects/project0/resources/deps/
-/test-projects/graph/
-/test-projects/projects.svg
-/test-projects/projects.dot
-/test-projects/projects.edn
-/test-projects/nodes-edges.edn
+/test-projects
 /.idea/
 /project.iml
