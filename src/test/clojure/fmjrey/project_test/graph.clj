@@ -18,8 +18,7 @@
   represented as simple nodes, while dependencies are grouped by type (:lib or
   :shared-lib) and shown as a single node using the rectangular graphviz record
   shape."
-  (:require [clojure.edn :as edn]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [clojure.pprint :as pp]
             [clojure.math.combinatorics :as combo]
             [fmjrey.project-test.tangle :as tg]
@@ -116,12 +115,19 @@
    })
 
 (defn prjs-depth-first
+  "The list of all project names starting from the given root project name to
+  library leafs, or from dependent project to dependencies using depth-first
+  traversal."
   [projects root-prj]
   (tree-seq #(seq (get-in projects [:by-name %1 :deps]))
             #(get-in projects [:by-name %1 :deps])
             root-prj))
 
 (defn prjs-leaf-first
+  "The list of all project names starting from library leafs, that is to say
+  from dependencies to dependent projects using a depth-first traversal
+  starting from the given root project name. This allows for processing
+  dependencies before dependent projects."
   [projects root-prj]
   (let [deps (get-in projects [:by-name root-prj :deps])]
     (if (seq deps)
@@ -156,6 +162,8 @@
      (:shared-lib) (str shared-deps-prefix separator level))))
 
 (defn deps-node-label
+  "Format a label so that it lists all dependencies it represents in a way
+  that is required by GraphViz record shape."
   [libvs]
   (str "{"
        (->> (mapv first libvs)
@@ -174,6 +182,7 @@
      :label (deps-node-label libvs)}))
 
 (defn add-deps-to-prjm
+  "Add a new set of deps to a project map."
   [prjm type libvs deps-node]
   (let [deps (mapv first libvs)]
     (-> prjm
@@ -195,6 +204,7 @@
         (update :node+deps assoc deps-node-name [deps-node deps]))))
 
 (defn add-prjm-to-tree
+  "Add a new project map to the tree."
   [projects {:keys [type level name deps] :as prjm}]
   (if (contains? (projects :by-name) name)
     (throw (ex-info (str "Project " name " already registered") projects))
@@ -343,7 +353,7 @@
                                                          (str n ".svg")))}))})
 
 (defn app-attrs
-  "Graphviz attributes for the graph of all projects."
+  "Graphviz attributes for the ubergraph of all projects."
   [{:keys [depth] :as projects}]
   (update (prj-attrs projects) :graph merge {:nodesep (dec depth)
                                              :ranksep depth}))

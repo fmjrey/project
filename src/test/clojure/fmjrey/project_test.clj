@@ -6,6 +6,15 @@
             [clojure.java.process :as cjp]
             [fmjrey.invoke :as ext]))
 
+;;==============================================================================
+;; TODO: use generated projects, until then test are failing.
+
+;; Run conditions
+(def execution-time [:runtime :devtime])
+(def where [:app :lib])
+(def query [:app :lib])
+
+
 (defn project-invoke
   [from s & opts]
   (let [r (ext/invoke {:alias :cli
