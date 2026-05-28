@@ -131,7 +131,7 @@
 
 (defn prjs-depth-first
   "Return the list of all project names, starting from application roots or
-  the given project name, and ending with library leafs, so that a project
+  the given project name, and ending with library leaves, so that a project
   appears just before its dependencies (depth-first traversal).
   The resulting sequence contains duplicates for shared libraries."
   [projects root-prj]

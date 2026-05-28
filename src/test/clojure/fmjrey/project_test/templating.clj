@@ -27,30 +27,24 @@
 
 (declare prjs-depth-first)
 (defn prjs-depth-first-
-  ([]
-   (distinct (for [app (projects :apps)
-                   prj (prjs-depth-first app)]
-               prj)))
+  ([] (graph/prjs-from-roots projects))
   ([root-prj]
    (distinct (graph/prjs-depth-first projects root-prj))))
 (def prjs-depth-first
   "Return the list of all project names, starting from application roots or
-  the given project name, and ending with library leafs, so that a project
+  the given project name, and ending with library leaves, so that a project
   appears before its dependencies (depth-first traversal).
   This function is memoized."
   (memoize prjs-depth-first-))
 
 (declare prjs-leaf-first)
 (defn prjs-leaf-first-
-  ([]
-   (distinct (for [app (projects :apps)
-                   prj (prjs-leaf-first app)]
-               prj)))
+  ([] (graph/prjs-from-leaves projects))
   ([root-prj]
    (distinct (graph/prjs-leaf-first projects root-prj))))
 (def prjs-leaf-first
   "Return the list of all project names in the tree rooted in all applications
-  or the given project, starting from library leafs and ending with tree roots,
+  or the given project, starting from library leaves and ending with tree roots,
   so that dependencies always appear before the projects depending on them
   (post-recursive depth-first traversal).
   This function is memoized."
