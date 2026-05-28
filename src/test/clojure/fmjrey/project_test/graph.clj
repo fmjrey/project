@@ -115,6 +115,20 @@
    :save-dot? true ; debugging help
    })
 
+(defn prjs-from-roots
+  "Return a list of all projects, starting from root projects at the top, and
+  ending with library leaves at the lowest level in the tree, without any
+  duplicates."
+  [projects]
+  (apply concat (projects :by-level)))
+
+(defn prjs-from-leaves
+  "Return a list of all projects, starting from library leaves at the lowest
+  level in the tree, and ending with root projects at the top, without any
+  duplicates."
+  [projects]
+  (apply concat (-> projects :by-level reverse)))
+
 (defn prjs-depth-first
   "Return the list of all project names, starting from application roots or
   the given project name, and ending with library leafs, so that a project
@@ -296,15 +310,15 @@
 
 (defn deps-edges*
   [projects from-nodes+deps]
-  (for [;
-        [{from-node-name :id} from-deps] from-nodes+deps
-        from-dep from-deps
-        [{to-node-name :id} :as to-node+deps] (->nodes+deps projects from-dep)
-        :let [edge [(if (str/starts-with? to-node-name shared-deps-prefix)
-                      from-node-name
-                      (str from-node-name ":" from-dep))
-                    to-node-name]
-              deps-edges* (apply concat (deps-edges* projects [to-node+deps]))]]
+  (doseq
+      [[{from-node-name :id} from-deps] from-nodes+deps
+       from-dep from-deps
+       [{to-node-name :id} :as to-node+deps] (->nodes+deps projects from-dep)
+       :let [edge [(if (str/starts-with? to-node-name shared-deps-prefix)
+                     from-node-name
+                     (str from-node-name ":" from-dep))
+                   to-node-name]
+             deps-edges* (apply concat (deps-edges* projects [to-node+deps]))]]
     (conj deps-edges* edge)))
 
 (defn deps-edges
