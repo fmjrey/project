@@ -2,22 +2,40 @@
   "Generates test projects data as a tree of dependencies where top level
   applications (projects of type :app) depend on libraries (projects of
   type :lib or :shared-lib), themselves depending on libraries generated in
-  the same way. Projects are stored into a single map which contains data for
-  generating the projects as well as data needed to generate GraphViz SVGs.
+  the same way. The dependency tree graph and project data are stored into a
+  single projects map which also contains data for generating GraphViz SVGs.
+  The idea is to build a dependency tree with various forms of projects: source
+  projects, jar projects, deps.edn copied as a resource or not, etc.
 
   The logic for generating dependencies of a project is always the same
-  regardless of the level in the dependency tree. It starts from all combinations
-  of static parameters that represent steps for generating a project.
-  Unless it's a leaf node, each project has its own unique set of dependency
-  projects generated, as well as a set of dependencies shared by all projects
+  regardless of the level in the dependency tree. It starts from combining
+  static parameters that represent build steps for generating a project, steps
+  that are referred in the code as builder(s).
+  Unless it's a leaf node, each project has its own set of dependency projects
+  generated with various builder combinations and not required by any other
+  projects, as well as a set of dependencies required/shared by all projects
   of the same level in the tree.
 
-  A visual representation of the tree as a set of SVG files is done with
-  GraphViz. Each graph node in the SVGs hyperlinks to a subgraph.
-  For better layout in generated SVG images, only apps (top level roots) are
-  represented as simple nodes, while dependencies are grouped by type (:lib or
-  :shared-lib) and shown as a single node using the rectangular graphviz record
-  shape."
+  A visual representation of the tree as a set of SVG files is generated with
+  GraphViz. Each node in the SVGs hyperlinks to a subgraph. For better layout
+  only apps (top level roots) are represented as simple elliptical shapes,
+  while dependencies are grouped by type (:lib or :shared-lib) and shown as
+  a single node using the rectangular graphviz record shape
+  (https://www.graphviz.org/doc/info/shapes.html#record).
+
+  Some naming conventions in addition to those in project_test.clj:
+  - prjv, appv, libv = prj/app/lib vector as [name type level builder].
+  - prjm, appm, libm = prj/app/lib map as per prjv->prjm and add-deps-to-prjm.
+  - prjvs, appvs, libvs = sequence of prjv/appv/libv vectors.
+  - dep(s) = a (list of) dependency library name(s).
+  - node = a graphviz node, which is either a simple application node which is
+    just made up of the application name, or a \"deps\" node representing
+    several libraries required by one or more projects. The latter use
+    the graphviz record shape with a label as expected by graphviz.
+  - node+deps = a deps node + the deps it represents as a vector [node deps]
+              where node is a map as expected by tangle (node descriptor) and
+              deps a list of dependency names (lib names).
+  - nodes+deps = a list of node+deps."
   (:require [clojure.string :as str]
             [clojure.pprint :as pp]
             [clojure.math.combinatorics :as combo]
@@ -26,8 +44,8 @@
 
 ;;==============================================================================
 ;; Static project creation parameters that represent choices to be made for
-;; for generating a test project. They are used as parameters, or steps, to the
-;; generation logic and for naming test projects.
+;; for generating a test project. They are used as parameters, or steps, for
+;; naming and building test projects.
 ;; Due to graphviz constraints, these keywords must not contain the hyphen
 ;; character '-' but can contain the underline character '_'.
 
@@ -42,7 +60,7 @@
   [:local :uberjar #_:war])
 
 ;; Generate all combinations of static parameters above for both apps and libs.
-;; These combinations are then considered as parameters or steps for generating
+;; These combinations are then considered as parameters or steps for building
 ;; a test project.
 (def app-builders
   "All possible sets of build steps for generating test applications."
@@ -56,23 +74,6 @@
 ;;==============================================================================
 ;; Main logic for creating the graph/tree.
 ;;
-;; Some naming conventions:
-;; project = either an application or a library
-;; prj, app, lib = the name of a project, application, or library
-;; prjs, apps, libs = sequence of project/app/lib names
-;; prjv, appv, libv = project/app/lib vector as [name type level builder]
-;; prjm, appm, libm = project/app/lib map as per prjv->prjm and add-deps-to-libm
-;; prjvs, appvs, libvs = sequence of project/app/lib vectors
-;; dep(s) = (list of) dependency library name(s)
-;; node = a graphviz node, which is either a simple application node which is
-;;        just made up of the application name, or a "deps" node representing
-;;        several libraries required by one or more projects. The latter use
-;;        the graphviz record shape with a label as expected by graphviz, see
-;;        https://www.graphviz.org/doc/info/shapes.html#record.
-;; node+deps = a deps node + the deps it represents as a vector [node deps]
-;;             where node is a map as expected by tangle (node descriptor) and
-;;             deps a list of dependency names (lib names).
-;; nodes+deps = a list of node+deps
 
 (def separator
   "Separator character to be used instead of hyphen '-'"
@@ -115,19 +116,21 @@
    })
 
 (defn prjs-depth-first
-  "The list of all project names starting from the given root project name to
-  library leafs, or from dependent project to dependencies using depth-first
-  traversal."
+  "Return the list of all project names, starting from application roots or
+  the given project name, and ending with library leafs, so that a project
+  appears just before its dependencies (depth-first traversal).
+  The resulting sequence contains duplicates for shared libraries."
   [projects root-prj]
   (tree-seq #(seq (get-in projects [:by-name %1 :deps]))
             #(get-in projects [:by-name %1 :deps])
             root-prj))
 
 (defn prjs-leaf-first
-  "The list of all project names starting from library leafs, that is to say
-  from dependencies to dependent projects using a depth-first traversal
-  starting from the given root project name. This allows for processing
-  dependencies before dependent projects."
+  "Return the list of all project names in the tree rooted in all applications
+  or the given project, starting from library leaves and ending with tree roots,
+  so that dependencies always appear before the projects depending on them
+  (post-recursive depth-first traversal).
+  The resulting sequence contains duplicates for shared libraries."
   [projects root-prj]
   (let [deps (get-in projects [:by-name root-prj :deps])]
     (if (seq deps)

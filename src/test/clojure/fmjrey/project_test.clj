@@ -1,4 +1,23 @@
 (ns fmjrey.project-test
+  "fmjrey/project testing is based on generating test projects with `deps-new`
+  and invoking their code using `fmjrey/invoke`.
+  Projects are generated from the same template following a dependency tree
+  graph for which SVG images are also generated.
+
+  For better semantics the code follows the following naming conventions:
+
+  - project = general designation of either an application or a library project,
+    the former being just a root in the dependency tree.
+  - prj, app, lib = the string name of a project, application, or library, using
+    _ instead of - due to GraphViz constraints.
+  - prjs, apps, libs = sequence of prj/app/lib names.
+  - prjm, appm, libm = prj/app/lib data map in the graph.
+  - dep(s) = (list of) dependency library name(s).
+
+  A function name containing -> usually indicates some simple format conversion.
+  A function name ending with * indicates it applies repetitively the logic of
+  the function without *, possibly recursively, or by accepting some sequence
+  argument(s) instead of a single value."
   (:require [clojure.data :as data]
             [clojure.edn :as edn]
             [clojure.string :as str]
