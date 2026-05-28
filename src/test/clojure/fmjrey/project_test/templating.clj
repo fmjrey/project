@@ -23,19 +23,39 @@
 (def depth "The deps of the dependency tree" 2)
 (def projects-dir "Where projects are generated" "test-projects")
 (def projects "The project dependency tree" (graph/projects depth projects-dir))
+(def apps (projects :apps))
+
+(declare prjs-depth-first)
+(defn prjs-depth-first-
+  ([]
+   (distinct (for [app (projects :apps)
+                   prj (prjs-depth-first app)]
+               prj)))
+  ([root-prj]
+   (distinct (graph/prjs-depth-first projects root-prj))))
 (def prjs-depth-first
-  "The list of all project names starting from application roots to library
-  leafs, or from dependent project to dependencies using depth-first traversal."
-  (distinct (for [app (projects :apps)
-                  prj (graph/prjs-depth-first projects app)]
-              prj)))
+  "Return the list of all project names, starting from application roots or
+  the given project name, and ending with library leafs, so that a project
+  appears before its dependencies (depth-first traversal).
+  This function is memoized."
+  (memoize prjs-depth-first-))
+
+(declare prjs-leaf-first)
+(defn prjs-leaf-first-
+  ([]
+   (distinct (for [app (projects :apps)
+                   prj (prjs-leaf-first app)]
+               prj)))
+  ([root-prj]
+   (distinct (graph/prjs-leaf-first projects root-prj))))
 (def prjs-leaf-first
-  "The list of all project names starting from library leafs, that is to say
-  from dependencies to dependent projects using depth-first traversal. This is
-  used for generating dependencies before generating dependent projects."
-  (distinct (for [app (projects :apps)
-                  prj (graph/prjs-leaf-first projects app)]
-              prj)))
+  "Return the list of all project names in the tree rooted in all applications
+  or the given project, starting from library leafs and ending with tree roots,
+  so that dependencies always appear before the projects depending on them
+  (post-recursive depth-first traversal).
+  This function is memoized."
+  (memoize prjs-leaf-first-))
+
 
 ;;==============================================================================
 ;; Functions to prepare the data needed for generating test projects.
