@@ -735,7 +735,7 @@ Until then here is the following feedback to the core team:
   a new feature to be provided by the clojure deps runtime. The alternative is
   using the `deps.edn` resource copy, but this would force having that copy in
   source control, which opens a can of worms in terms of sync issues.
-- **Provide a way to invoke externally any function from any project**:
+- **Provide a way to invoke externally any function from any project or jar**:
   the testing of this project required an enhanced copy of the clojure
   [protocol](https://clojure.org/reference/clojure_cli#function_protocol)
   to programmatically invoke functions in an external process via the clojure

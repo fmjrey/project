@@ -413,9 +413,11 @@
   ([{:keys [projects-dir save-edn?] :as projects}]
    ;; generate the dot data for the ubergraph of all projects
    (let [projects (assoc projects :subdir "graph")
-         [nodes edges] (deps-nodes-edges projects)]
+         [nodes edges] (deps-nodes-edges projects)
+         edn-file (io/file projects-dir "nodes-edges.edn")
+         _ (io/make-parents edn-file)]
      (when save-edn?
-       (with-open [wr (io/writer (io/file projects-dir "nodes-edges.edn"))]
+       (with-open [wr (io/writer edn-file)]
          (.write wr (with-out-str (pp/pprint [nodes edges])))))
      (tg/graph->dot nodes edges (app-attrs projects))))
   ([{:keys [projects-dir save-edn?] :as projects} prj-or-node+deps]

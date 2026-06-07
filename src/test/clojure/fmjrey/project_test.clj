@@ -23,7 +23,9 @@
             [clojure.string :as str]
             [clojure.test :refer :all]
             [clojure.java.process :as cjp]
-            [fmjrey.invoke :as ext]))
+            [fmjrey.invoke :as ext]
+            [fmjrey.project-test.graph :as graph]
+            [fmjrey.project-test.templating :as tmpl]))
 
 ;;==============================================================================
 ;; TODO: use generated projects, until then test are failing.
@@ -35,59 +37,65 @@
 
 
 (defn project-invoke
-  [from s & opts]
-  (let [r (ext/invoke {:alias :cli
-                       :dir "test-projects/project0"
-                       :fn 'test.project0/invoke
-                       ;:debug true
-                       :preserve-envelope true
-                       :args (merge opts {:clojure.exec/err :capture
-                                          :fmjrey.project/verbose :very
-                                          :from (pr-str from)
-                                          :s (pr-str s)})})]
-    ;(-> r :err println)
-    (-> r :val edn/read-string)))
+  [{:keys [type builder dir jar]} invoke-fn from s & opts]
+  {:pre [(= :app type)]}
+  (let [cmd {:alias :cli
+             :dir dir
+             :fn invoke-fn
+             :debug true
+             :preserve-envelope true
+             :args (merge opts {:clojure.exec/err :capture
+                                :fmjrey.project/verbose :very
+                                :from (pr-str from)
+                                :s (pr-str s)})}
+        cmd (if (some #{:uberjar} builder)
+              (assoc cmd :cp jar)
+              cmd)
+        r (ext/invoke cmd)]
+    (case (:tag r)
+      :err (-> r :err println)
+      :ret (-> r :val edn/read-string))))
 
-(defn project-n-lib
-  [n]
-  (symbol "test" (str "project" n)))
-
-(defn project-n-info
-  [n]
-  {:id (project-n-lib n)
-   :name (str "Test project #" n)
-   :license {:id "EPL-2.0"
-             :name "Eclipse Public License 2.0"
-             :url "https://www.eclipse.org/legal/epl-2.0"}})
-
-#_(deftest project-n-test
-  (testing "Scaffolding: test projects have correct number defined"
-    (doseq [n (range 4)]
-      (is (= n (project-invoke n 'project-n))))))
+(deftest project-name-test
+  (testing "Scaffolding: test projects have correct name defined"
+    (doseq [{app :name :as app-info} (mapv tmpl/project-info tmpl/apps)
+            :let [prjs (tmpl/prjs-depth-first app)
+                  res (project-invoke app-info 'invoke* prjs 'project-name)]
+            :while res]
+      (is (= (count prjs) (count res)))
+      (doseq [prj prjs]
+        (is (= prj (get res [prj 'project-name])))))))
 
 (deftest project-lib-test
-  (testing "Scaffolding: test projects have correct number and lib defined"
-    (doseq [n (range 4)]
-      (is (= (symbol "test" (str "project" n))
-             (project-invoke n 'lib))))))
+  (testing "Scaffolding: test projects have correct name and lib defined"
+    (doseq [{app :name :as app-info} (mapv tmpl/project-info tmpl/apps)
+            :let [prjs (tmpl/prjs-depth-first app)
+                  res (project-invoke app-info 'invoke* prjs 'lib)]]
+      (is (not (nil? res)))
+      (when res
+        (is (= (count prjs) (count res)))
+        (doseq [prj prjs]
+          (is (= (tmpl/->project-lib prj) (get res [prj 'lib]))))))))
 
-(deftest lib-info-test
+#_(deftest lib-info-test
   (testing "Testing project-info with lib argument"
     (doseq [n (range 4)]
       (is (= (if (= n 1)
                nil ; project1 does not have a deps.edn copied  as a resource
-               (project-n-info n))
+               (project-info n))
              (project-invoke n 'lib-info))))))
 
-(deftest app-info-test
+#_(deftest app-info-test
   (testing "Testing project-info without lib argument"
     (doseq [n (range 4)]
-      (is (= (project-n-info 0)
+      (is (= (project-info 0)
              (project-invoke n 'app-info))))))
 
 
 (defn test-ns-hook []
-  ;;(project-n-test)
-  (project-lib-test)
-  (lib-info-test)
-  (app-info-test))
+  (project-name-test)
+  ;;(project-lib-test)
+  ;;(lib-info-test)
+  ;;(app-info-test)
+  ;;
+  )

@@ -8,7 +8,11 @@
   is in a separate graph namespace that also contains the logic to generate
   SVG images of the tree.
 
-  Generating all test projects can take some time, so best is to do it once."
+  Generating all test projects can take some time, so best is to do it once.
+  For now images and projects are generated when the test-projects directory
+  does not exist, and aren't if it does. This check happens statically, ie when
+  this namespace is loaded."
+
   (:require [clojure.string :as str]
             [clojure.pprint :as pp]
             [clojure.java.io :as io]
@@ -56,17 +60,42 @@
 
 (def test-version "Version for all generated projects" "0.1.0-SNAPSHOT")
 
+(defn ->project-name
+  [artifact-id]
+  (str/replace artifact-id "-" "_"))
+
+(defn ->project-ns-str
+  [prj]
+  (str "test." (str/replace prj "_" "-")))
+(defn ->project-lib
+  [prj]
+  (symbol "test" (str/replace prj "_" "-")))
+
+(defn ->project-ns-str
+  [prj]
+  (str "test." (str/replace prj "_" "-")))
+
+(defn ->project-dir
+  [prj]
+  (str (io/file projects-dir prj)))
+
 (defn project-info
-  "Augment a project data map with additional entries used for generation."
-  [{project-name :name :as libm}]
-  (assoc libm
-         :id (symbol "test"  project-name)
-         :ns (str "test." project-name)
-         :dir (str (io/file projects-dir project-name))
-         :jar (format "target/%s-%s.jar" project-name test-version)
-         :license {:id "EPL-2.0"
-                   :name "Eclipse Public License 2.0"
-                   :url "https://www.eclipse.org/legal/epl-2.0"}))
+  "Retrieve and augment a project data map with additional entries used for
+  generation."
+  [prj-or-prjm]
+  (let [{prj :name :as libm} (cond
+                               (string? prj-or-prjm)
+                               (get-in projects [:by-name prj-or-prjm])
+                               (map? prj-or-prjm)
+                               prj-or-prjm)]
+    (assoc libm
+           :id  (->project-lib    prj)
+           :ns  (->project-ns-str prj)
+           :dir (->project-dir    prj)
+           :jar (format "target/%s-%s.jar" prj test-version)
+           :license {:id "EPL-2.0"
+                     :name "Eclipse Public License 2.0"
+                     :url "https://www.eclipse.org/legal/epl-2.0"})))
 
 (defn ->dep-edn-decl
   "deps.edn dependency declaration for one test project."
@@ -131,6 +160,20 @@
             (apply str)))
      (pstr n coll))))
 
+(defn pstr-coll
+  "Pretty-printed string of a collection, one entry per line, with optional
+  indentation."
+  ([coll] (pstr-coll nil coll))
+  ([n coll]
+   (if (coll? coll)
+     (let [[begin end] (cond
+                         (map?    coll) ["{" "}"]
+                         (set?    coll) ["#{" "}"]
+                         (vector? coll) ["[" "]"]
+                         (seq?    coll) ["(" ")"])]
+       (str begin (pstr-entries (+ n (count begin)) coll) end))
+     (pstr n coll))))
+
 (defn extra-aliases
   "Additional aliases to add in the generated deps.edn of a project."
   [{:keys [type]}]
@@ -143,10 +186,19 @@
    type))
 
 ;;==============================================================================
-;; Functions to actually generate test projects.
+;; Functions to actually generate and build test projects.
+
+(defn gen-from-template
+  "Generate a single test project with deps-new."
+  [{:keys [id dir]}]
+  (with-out-str
+    (new/create {:template 'test/project-template
+                 :name id
+                 :target-dir dir
+                 :overwrite true})))
 
 (defn invoke-build
-  "Invoke a build tool on a test project in an external process."
+  "Invoke a build function on a test project in an external process."
   [{:keys [dir]} f]
   (let [r (ext/invoke {:tool-alias :build
                        :dir dir
@@ -156,29 +208,33 @@
         err (:err r)]
     (when err println)))
 
-(defn gen-from-template
-  "Generate a single test project with deps-new."
-  [{:keys [id dir]}]
-  (new/create {:template 'test/project-template
-               :name id
-               :target-dir dir
-               :overwrite true}))
-
 (defn build
   "Generate a new test project on disk and invoke its build steps such as
   creating a jar or uberjar, copying deps.edn to a resource directory, etc."
-  [{:keys [builder] :as project-info}]
+  [project-info]
   (gen-from-template project-info)
-  (doseq [step builder]
-    (case step
-      :local    nil
-      :copydeps (invoke-build project-info 'copy-deps)
-      :jar      (invoke-build project-info 'jar)
-      :uberjar  (invoke-build project-info 'uberjar))))
+  (invoke-build project-info 'build))
 
-(defn gen
-  "Main entry point to generate all test projects on disk along with tree
-  graph SVG images."
+(defn build-prj
+  "Generate on disk the project with the given name."
+  [prj]
+  (->> (get-in projects [:by-name prj])
+       project-info
+       build))
+
+(defn build-prjs
+  "Generate on disk projects with the given list of project names. Projects in prjs must not
+  depend on each other so as to enable concurrent building."
+  [prjs]
+  (doseq [prj prjs] (build-prj prj)))
+
+(defn build-apps
+  "Generate on disk application (top level) projects only."
+  []
+  (build-prjs (projects :apps)))
+
+(defn gen-imgs
+  "Generate on disk all SVG images and optional EDN files."
   []
   (let [{:keys [save-edn?]} projects
         f (io/file projects-dir "projects.edn")
@@ -186,27 +242,39 @@
     (when save-edn?
       (with-open [wr (io/writer f)]
         (.write wr (with-out-str (pp/pprint projects)))))
-    (graph/gen-imgs projects)
-    (doseq [prj prjs-leaf-first
-            :let [project-info (->> (get-in projects [:by-name prj])
-                                    project-info)]]
-      (build project-info))))
+    (graph/gen-imgs projects)))
+
+(defn gen
+  "Main entry point to generate all test projects on disk along with SVG images."
+  []
+  (gen-imgs)
+  (doseq [prjs (-> projects :by-level rseq)]
+    (build-prjs prjs)))
+
+;;==============================================================================
+;; Generate images and projects if destination directory does not exist.
+
+(when-not (.exists (io/file projects-dir))
+  (println "Directory" projects-dir "not found.")
+  (gen))
 
 ;;==============================================================================
 ;; Functions needed by deps-new to generate from template.
 
 (defn data-fn
-  [{:keys [top main]}]
+  [{:keys [top artifact/id] :as data}]
   {:pre (= top "test")}
-  (let [{:keys [name jar] {license-id :license/id} :license :as project-info}
-        (project-info (get-in projects [:by-name main]))]
-    (assert name (format "Project %s not found" main))
+  (let [prj (->project-name id)
+        {:keys [name jar deps] {license-id :license/id} :license :as project-info}
+        (some-> (get-in projects [:by-name prj]) project-info)]
+    (assert name (format "Project named \"%s\" not found" prj))
     {:project/name name
      :description (str "Test project " name)
-     :project/info (pstr 16 (dissoc project-info :deps :deps-nodes))
+     :project/info (pstr 16 (dissoc project-info :deps-nodes))
      :license/id license-id
      :project/jar jar
-     :deps.edn/extra-aliases (pstr-entries 2 (extra-aliases project-info))
+     :project/deps (pstr-coll 11 deps)
+     :deps.edn/extra-aliases (pstr-entries 10 (extra-aliases project-info))
      :deps.edn/deps (pstr 7 (->deps-edn-decl project-info))}))
 
 (defn template-fn

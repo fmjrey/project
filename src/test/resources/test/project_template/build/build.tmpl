@@ -96,3 +96,13 @@
     (println "\nBuilding JAR..." (:uber-file opts))
     (b/uber opts))
   opts)
+
+(defn build
+  "Invoke this project build steps."
+  [{:keys [builder] :as opts}]
+  (doseq [step builder]
+    (case step
+      :local    nil
+      :copydeps (copy-deps opts)
+      :jar      (jar       opts)
+      :uberjar  (uberjar   opts))))

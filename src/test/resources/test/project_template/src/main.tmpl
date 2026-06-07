@@ -4,6 +4,7 @@
 
 (def project-name "{{project/name}}")
 (def lib '{{top/ns}}/{{main/ns}})
+(def deps {{project/deps}})
 
 ;; Storing the result of calling the project-info macro so it can be
 ;; inspected by test cases
@@ -29,17 +30,25 @@
     (pr (str (str/join " " msgs) nl))
     (flush)))
 
+(defn ->project-lib
+  [prj]
+  (symbol "test" (str/replace prj "_" "-")))
+
+(defn ->project-ns-str
+  [prj]
+  (str "test." (str/replace prj "_" "-")))
+
 (defn resolve-from
   [from symbol-or-string]
   (printerrln (format "resolve-from %s (%s) %s (%s)" (str from) (type from)
                                                      (str  symbol-or-string)
                                                      (type symbol-or-string)))
-  (let [from (symbol "test" (str from))
+  (let [from (->project-lib from)
         from-here? (= from lib)
         s (if (string? symbol-or-string)
             (symbol symbol-or-string)
             symbol-or-string)
-        from-ns-str (str "test." (if from-here? project-name from))
+        from-ns-str (->project-ns-str (if from-here? project-name from))
         s-ns-str (or (namespace s) from-ns-str)
         s (if (qualified-symbol? s) s (symbol s-ns-str (name s)))
         _ (printerrln "  s=" s)
@@ -52,11 +61,55 @@
     resolved))
 
 (defn invoke
-  [{:keys [from s]
-    :or {from project-name s 'lib-info}
-    :as opts}]
-  (println (format ";project-%s/invoke: :from=%s s=%s" project-name (str from) (str s)))
-  (let [resolved (resolve-from from s)
-        v (var-get resolved)
-        _ (printerrln (format "project-%s/invoke: v=%s (%s)" project-name (str v) (str (type v))))]
-    (if (fn? v) (v opts) v)))
+  "Call the function referred by the symbol or string in :s from the
+  code of project designated by the symbol or string in :from.
+  The symbol or string in :from must be an unqualified project name.
+  The symbol or string in :s may be qualified, and must resolve to a function
+  or var. If unqualified the symbol is resolved in the :from project namespace.
+  When not provided, they default respectively to \"{{project/name}}\"
+  and lib-info.
+  Return the result of the evaluating the resolved symbol."
+  ([{:keys [from s]
+     :or {from project-name s 'lib-info}
+     :as opts}]
+   (invoke from s opts))
+  ([from s opts]
+   (println (format ";test.%s/invoke: :from=%s s=%s"
+                    project-name (str from) (str s)))
+   (let [resolved (resolve-from from s)
+         v (var-get resolved)
+         _ (printerrln (format "test.%s/invoke: v=%s (%s)"
+                               project-name (str v) (str (type v))))]
+     (if (fn? v) (v opts) v))))
+
+(defn invoke*
+  "Same as the invoke function except :from and :s can also be sequences, in
+  which case all their combinations are invoked (list comprehension).
+  When both :from and :s are not provided, :from-s must contain a list of
+  [from s] tuples to be invoked. If either or both are provided, :from-s
+  is ignored.
+  Return a map of results indexed by [from s] vectors."
+  [{:keys [from s from-s] :as opts}]
+  (let [from-s? (and (nil? from) (nil? s))
+        from (cond
+               from-s? nil
+               (sequential? from) (seq from)
+               (nil? from) [project-name]
+               from [from])
+        s    (cond
+               from-s? nil
+               (sequential? s) (seq s)
+               (nil? s) ['lib-info]
+               s [s])
+        from-s (if from-s? from-s (for [from from s s] [from s]))]
+    (into {} (map (fn [[from s]] (invoke from s opts)) from-s))))
+
+(defn invoke-from-deps
+  [opts]
+  (invoke* (assoc opts :from deps)))
+
+(defn invoke-from-deps*
+  [opts]
+  (invoke-from-deps opts)
+  (doseq [dep deps]
+    (invoke dep 'invoke-from-deps* opts)))
