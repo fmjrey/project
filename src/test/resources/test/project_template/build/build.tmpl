@@ -8,6 +8,7 @@
 (def lib 'test/{{artifact/id}})
 (def version "{{version}}")
 (def main '{{top/ns}}.{{main/ns}})
+(def builder '{{project/builder}})
 (def target-dir "target")
 (def class-dir (str (io/file target-dir "classes")))
 
@@ -99,7 +100,7 @@
 
 (defn build
   "Invoke this project build steps."
-  [{:keys [builder] :as opts}]
+  [{:keys [builder] :or {builder builder} :as opts}]
   (doseq [step builder]
     (case step
       :local    nil

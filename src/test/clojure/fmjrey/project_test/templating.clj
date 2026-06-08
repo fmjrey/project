@@ -8,15 +8,18 @@
   is in a separate graph namespace that also contains the logic to generate
   SVG images of the tree.
 
-  Generating all test projects can take some time, so best is to do it once.
-  For now images and projects are generated when the test-projects directory
-  does not exist, and aren't if it does. This check happens statically, ie when
-  this namespace is loaded."
+  Generating all test projects can take several minutes, so best is to do it
+  once, which is why they are generated when the test-projects directory does
+  not exist. This check happens statically when this namespace is loaded."
 
-  (:require [clojure.string :as str]
+  (:require [clojure.edn :as edn]
+            [clojure.math :as math]
+            [clojure.string :as str]
             [clojure.pprint :as pp]
             [clojure.java.io :as io]
             [org.corfield.new :as new]
+            [missionary.core :as m]
+            [clj-duration.core :as dur]
             [fmjrey.invoke :as ext]
             [fmjrey.project-test.graph :as graph]))
 
@@ -24,9 +27,27 @@
 ;; The project dependency tree is generated statically and stored in a var.
 ;; Parameters such as depth and target directory are also statically defined.
 
-(def depth "The deps of the dependency tree" 2)
-(def projects-dir "Where projects are generated" "test-projects")
-(def projects "The project dependency tree" (graph/projects depth projects-dir))
+(def static-gen
+  "Set to true to enable static project generation without concurrency, or set
+  to :concurrent to generate them concurrently. Best to set this to false during
+  test development and use gen or gen= as needed."
+  ;;false
+  true
+  ;;:concurrent ; use more CPU and make it difficult to develop during that time
+  )
+(def debug
+  "Set to true to generate some more output and files."
+  false)
+(def depth
+  "The depth of the dependency tree to generate."
+  2)
+(def projects-dir
+  "Directory where projects are generated"
+  "test-projects")
+(def projects
+  "The project dependency tree"
+  (cond-> (graph/projects depth projects-dir)
+    debug (assoc :debug true)))
 (def apps (projects :apps))
 
 (declare prjs-depth-first)
@@ -60,7 +81,7 @@
 
 (def test-version "Version for all generated projects" "0.1.0-SNAPSHOT")
 
-(defn ->project-name
+(defn artifact-id->project-name
   [artifact-id]
   (str/replace artifact-id "-" "_"))
 
@@ -177,7 +198,7 @@
 (defn extra-aliases
   "Additional aliases to add in the generated deps.edn of a project."
   [{:keys [type]}]
-  ({:app {:project {:deps {'io.github.clojure/tools.build {:mvn/version "0.10.12"}
+  ({:app {:project {:deps {'io.github.clojure/tools.build {:mvn/version "0.10.14"}
                            'fmjrey/project {:local/root "../.."}}
                     :exec-args {:fmjrey.project/verbose true}
                     :ns-default 'fmjrey.project}}
@@ -186,7 +207,12 @@
    type))
 
 ;;==============================================================================
-;; Functions to actually generate and build test projects.
+;; Functions to actually generate and build test projects with or without
+;; concurrency.
+
+(def number-of-cores (.availableProcessors (Runtime/getRuntime)))
+(def core-multiplier 1.0)
+(def concurrent-tasks (Math/round (* number-of-cores core-multiplier)))
 
 (defn gen-from-template
   "Generate a single test project with deps-new."
@@ -199,14 +225,22 @@
 
 (defn invoke-build
   "Invoke a build function on a test project in an external process."
-  [{:keys [dir]} f]
-  (let [r (ext/invoke {:tool-alias :build
-                       :dir dir
-                       :fn f
-                       ;;:debug true
-                       :args {:clojure.exec/err :capture}})
-        err (:err r)]
-    (when err println)))
+  [{:keys [dir debug]} f]
+  (let [r (cond-> {:tool-alias :build :dir dir :fn f}
+            debug (assoc :debug true
+                         :preserve-envelope true
+                         :args {:clojure.exec/out :capture
+                                :clojure.exec/err :capture})
+            true ext/invoke)
+        result (if debug
+                 (case (:tag r)
+                   :err (-> r :err)
+                   :ret (-> r :val edn/read-string))
+                 r)]
+    (when debug
+      (with-open [wr (io/writer (io/file dir "build-output.edn"))]
+        (.write wr (with-out-str (pp/pprint result)))))
+    result))
 
 (defn build
   "Generate a new test project on disk and invoke its build steps such as
@@ -222,41 +256,81 @@
        project-info
        build))
 
+(defn build-prj-task
+  "Return a task to generate on disk the project with the given name."
+  [prj]
+  (m/via m/blk
+         (let [project-info (project-info (get-in projects [:by-name prj]))]
+           (m/? (m/via m/blk (gen-from-template project-info)))
+           (m/? (m/via m/blk (invoke-build project-info 'build))))))
+
 (defn build-prjs
-  "Generate on disk projects with the given list of project names. Projects in prjs must not
-  depend on each other so as to enable concurrent building."
+  "Generate on disk projects with the given list of project names."
   [prjs]
   (doseq [prj prjs] (build-prj prj)))
+
+(defn build-prjs=
+  "Generate concurrently on disk projects with the given list of project names.
+  Projects in prjs must not depend on each other so as to enable concurrent
+  building."
+  [prjs]
+  (m/?
+   (m/reduce (fn [count _] (inc count)) 0
+     (m/ap
+       (let [prj (m/?> concurrent-tasks (m/seed prjs))]
+         (m/? (build-prj-task prj)))))))
 
 (defn build-apps
   "Generate on disk application (top level) projects only."
   []
-  (build-prjs (projects :apps)))
+  (build-prjs apps))
 
 (defn gen-imgs
-  "Generate on disk all SVG images and optional EDN files."
+  "Generate on disk all SVG images and EDN files."
   []
-  (let [{:keys [save-edn?]} projects
-        f (io/file projects-dir "projects.edn")
+  (let [f (io/file projects-dir "projects.edn")
         _ (io/make-parents f)]
-    (when save-edn?
-      (with-open [wr (io/writer f)]
-        (.write wr (with-out-str (pp/pprint projects)))))
+    (with-open [wr (io/writer f)]
+      (.write wr (with-out-str (pp/pprint projects))))
     (graph/gen-imgs projects)))
 
 (defn gen
-  "Main entry point to generate all test projects on disk along with SVG images."
+  "Main entry point to generate all test projects on disk along with SVG images
+  without concurrency."
   []
   (gen-imgs)
   (doseq [prjs (-> projects :by-level rseq)]
     (build-prjs prjs)))
 
-;;==============================================================================
-;; Generate images and projects if destination directory does not exist.
+(defn gen=
+  "Main entry point to generate concurrently all test projects on disk along
+  with SVG images."
+  []
+  (gen-imgs)
+  (doseq [prjs (-> projects :by-level rseq)]
+    (build-prjs= prjs)))
 
-(when-not (.exists (io/file projects-dir))
-  (println "Directory" projects-dir "not found.")
-  (gen))
+;;==============================================================================
+;; Static generation of images and projects if destination dir does not exist.
+
+(let [static-gen? static-gen
+      concurrent? (= :concurrent static-gen)
+      dir-exists? (.exists (io/file projects-dir))
+      nb-projects (count (projects :by-name))]
+  (if static-gen?
+    (println "Static generation of test projects:")
+    (println "Warning: static test projects generation disabled."))
+  (if dir-exists?
+    (println "  Directory" projects-dir "exists.")
+    (println "  Directory" projects-dir "not found."))
+  (when static-gen?
+    (if dir-exists?
+      (println "  No projects will be generated.")
+      (do
+        (println (format "  Generating %d projects %s"
+                         nb-projects (if concurrent? "concurrently" "")))
+        (flush)
+        (dur/duration (if concurrent? (gen=) (gen)))))))
 
 ;;==============================================================================
 ;; Functions needed by deps-new to generate from template.
@@ -264,8 +338,9 @@
 (defn data-fn
   [{:keys [top artifact/id] :as data}]
   {:pre (= top "test")}
-  (let [prj (->project-name id)
-        {:keys [name jar deps] {license-id :license/id} :license :as project-info}
+  (let [prj (artifact-id->project-name id)
+        {:keys [name jar deps builder] {license-id :license/id} :license
+         :as project-info}
         (some-> (get-in projects [:by-name prj]) project-info)]
     (assert name (format "Project named \"%s\" not found" prj))
     {:project/name name
@@ -274,6 +349,7 @@
      :license/id license-id
      :project/jar jar
      :project/deps (pstr-coll 11 deps)
+     :project/builder (pstr builder)
      :deps.edn/extra-aliases (pstr-entries 10 (extra-aliases project-info))
      :deps.edn/deps (pstr 7 (->deps-edn-decl project-info))}))
 

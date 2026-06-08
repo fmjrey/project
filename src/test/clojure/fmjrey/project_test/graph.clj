@@ -118,8 +118,6 @@
                         :prefix     shared-lib-prefix
                         :counter    :lib-counter}}
    :projects-dir (str projects-dir)
-   :save-edn? true ; debugging help
-   :save-dot? true ; debugging help
    })
 
 (defn prjs-from-roots
@@ -410,17 +408,17 @@
 
 (defn dot
   "Generate the dot language data as expected by graphviz."
-  ([{:keys [projects-dir save-edn?] :as projects}]
+  ([{:keys [projects-dir debug] :as projects}]
    ;; generate the dot data for the ubergraph of all projects
    (let [projects (assoc projects :subdir "graph")
          [nodes edges] (deps-nodes-edges projects)
          edn-file (io/file projects-dir "nodes-edges.edn")
          _ (io/make-parents edn-file)]
-     (when save-edn?
+     (when debug
        (with-open [wr (io/writer edn-file)]
          (.write wr (with-out-str (pp/pprint [nodes edges])))))
      (tg/graph->dot nodes edges (app-attrs projects))))
-  ([{:keys [projects-dir save-edn?] :as projects} prj-or-node+deps]
+  ([{:keys [projects-dir debug] :as projects} prj-or-node+deps]
    ;; generate a subtree dot data given its root as a project name or node+deps
    (let [[nodes edges] (deps-nodes-edges projects prj-or-node+deps)
          name (cond
@@ -430,21 +428,21 @@
                 prj-or-node+deps)
          edn-file (io/file projects-dir "graph" (str name ".edn"))
          _ (io/make-parents edn-file)]
-     (when save-edn?
+     (when debug
        (with-open [wr (io/writer edn-file)]
          (.write wr (with-out-str (pp/pprint [nodes edges])))))
      (tg/graph->dot nodes edges (prj-attrs projects)))))
 
 (defn gen-img
   "Generate graphviz images to disk."
-  ([{:keys [projects-dir save-dot?] :as projects}]
+  ([{:keys [projects-dir debug] :as projects}]
    ;; generate the image for the ubergraph of all projects
    (let [dot (dot projects)
          svg (tg/dot->image dot "svg")]
-     (when save-dot?
+     (when debug
        (io/copy dot (io/file projects-dir "projects.dot")))
      (io/copy svg (io/file projects-dir "projects.svg"))))
-  ([{:keys [projects-dir save-dot?] :as projects} prj-or-node+deps]
+  ([{:keys [projects-dir debug] :as projects} prj-or-node+deps]
    ;; generate a subtree image given its root as a project name or node+deps
    (let [dot (dot projects prj-or-node+deps)
          svg (tg/dot->image dot "svg")
@@ -455,7 +453,7 @@
          svg-file (io/file projects-dir "graph" (str name ".svg"))]
      (io/make-parents svg-file)
      (io/copy svg svg-file)
-     (when save-dot?
+     (when debug
        (io/copy dot (io/file projects-dir "graph" (str name ".dot")))))))
 
 (defn gen-imgs

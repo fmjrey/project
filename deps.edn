@@ -1,6 +1,6 @@
 {:paths ["src/main/clojure" "src/main/resources"]
- :deps {org.clojure/clojure {:mvn/version "1.12.4"}
-        org.clojure/tools.deps.edn {:mvn/version "0.9.22"}}
+ :deps {org.clojure/clojure {:mvn/version "1.12.5"}
+        org.clojure/tools.deps.edn {:mvn/version "0.9.27"}}
  :tools/usage {:ns-default fmjrey.project}
  :aliases
  {:project/info {:id fmjrey/project
@@ -11,14 +11,18 @@
 
   ;; clj -M:test
   :test {:extra-paths ["src/test/clojure" "src/test/resources"]
-         :extra-deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}
+         :extra-deps {io.github.clojure/tools.build {:mvn/version "0.10.14"}
                       io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}
                       org.clojure/math.combinatorics {:mvn/version "0.3.2"}
+                      clj-duration/clj-duration {:mvn/version "1.0.0"}
                       hiccup/hiccup {:mvn/version "1.0.5"}
+                      ;; hiccup is required by tangle but the latter has been
+                      ;; duplicated in this project to sort out some issues
                       ;;macroz/tangle {:mvn/version "0.2.2"}
                       fmjrey/invoke {:local/root "../invoke"}
                       io.github.seancorfield/deps-new
-                      {:git/tag "v0.12.1" :git/sha "883e82c"}}
+                      {:git/tag "v0.12.1" :git/sha "883e82c"}
+                      missionary/missionary {:mvn/version "b.47"}}
          :main-opts ["-m" "cognitect.test-runner" "-d" "src/test/clojure"]
          :exec-fn cognitect.test-runner.api/test}
 
@@ -29,13 +33,13 @@
                      "--lint" "src/test/clojure"]}
 
   ;; CLI use with -X
-  :project {:extra-deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}}
+  :project {:extra-deps {io.github.clojure/tools.build {:mvn/version "0.10.14"}}
             :exec-args {:fmjrey.project/verbose true}
             :ns-default fmjrey.project}
 
   ;; build and task use with -T
   :build {:paths ["src/main/clojure" "src/main/resources"]
-          :deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}
-                 org.clojure/tools.deps.edn {:mvn/version "0.9.22"}
+          :deps {io.github.clojure/tools.build {:mvn/version "0.10.14"}
+                 org.clojure/tools.deps.edn {:mvn/version "0.9.27"}
                  slipset/deps-deploy {:mvn/version "0.2.2"}}
           :ns-default build}}}
