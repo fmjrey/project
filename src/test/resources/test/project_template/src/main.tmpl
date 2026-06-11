@@ -1,5 +1,6 @@
 (ns {{top/ns}}.{{main/ns}}
-  (:require [clojure.string :as str]
+  (:require [clojure.repl :as repl]
+            [clojure.string :as str]
             [fmjrey.project :as project]))
 
 (def project-name "{{project/name}}")
@@ -41,14 +42,14 @@
 (defn resolve-from
   [from symbol-or-string]
   (printerrln (format "resolve-from %s (%s) %s (%s)" (str from) (type from)
-                                                     (str  symbol-or-string)
-                                                     (type symbol-or-string)))
-  (let [from (->project-lib from)
-        from-here? (= from lib)
+                      (str  symbol-or-string)
+                      (type symbol-or-string)))
+  (let [from-lib (->project-lib from)
+        from-here? (= from-lib lib)
         s (if (string? symbol-or-string)
             (symbol symbol-or-string)
             symbol-or-string)
-        from-ns-str (->project-ns-str (if from-here? project-name from))
+        from-ns-str (->project-ns-str from)
         s-ns-str (or (namespace s) from-ns-str)
         s (if (qualified-symbol? s) s (symbol s-ns-str (name s)))
         _ (printerrln "  s=" s)
@@ -66,8 +67,7 @@
   The symbol or string in :from must be an unqualified project name.
   The symbol or string in :s may be qualified, and must resolve to a function
   or var. If unqualified the symbol is resolved in the :from project namespace.
-  When not provided, they default respectively to \"{{project/name}}\"
-  and lib-info.
+  When not provided, they default respectively to project-name and lib-info.
   Return the result of the evaluating the resolved symbol."
   ([{:keys [from s]
      :or {from project-name s 'lib-info}
@@ -82,27 +82,42 @@
                                project-name (str v) (str (type v))))]
      (if (fn? v) (v opts) v))))
 
+(defn throwable->map [^Throwable t]
+  {:test.project/throwable (str t)
+   :message (.getMessage t)
+   :type (class t)
+   :data (ex-data t)
+   :trace (with-out-str (repl/pst t))
+   :cause (when-let [c (.getCause t)] (throwable->map c))})
+
 (defn invoke*
   "Same as the invoke function except :from and :s can also be sequences, in
   which case all their combinations are invoked (list comprehension).
   When both :from and :s are not provided, :from-s must contain a list of
   [from s] tuples to be invoked. If either or both are provided, :from-s
   is ignored.
-  Return a map of results indexed by [from s] vectors."
+  Return a map of results indexed by [from s] vectors. Any exception will
+  be converted to a map value with the key :test.project/throwable containing
+  the string output of the exception along with other data elements."
   [{:keys [from s from-s] :as opts}]
   (let [from-s? (and (nil? from) (nil? s))
         from (cond
                from-s? nil
-               (sequential? from) (seq from)
+               (sequential? from) from
                (nil? from) [project-name]
                from [from])
         s    (cond
                from-s? nil
-               (sequential? s) (seq s)
+               (sequential? s) s
                (nil? s) ['lib-info]
                s [s])
         from-s (if from-s? from-s (for [from from s s] [from s]))]
-    (into {} (map (fn [[from s]] (invoke from s opts)) from-s))))
+    (into {} (map (fn [[from s]]
+                    [[from s] (try
+                                (invoke from s (assoc opts :from from :s s))
+                                (catch Throwable t
+                                  (throwable->map t)))])
+                  from-s))))
 
 (defn invoke-from-deps
   [opts]

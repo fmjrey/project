@@ -36,8 +36,10 @@
   ;;:concurrent ; use more CPU and make it difficult to develop during that time
   )
 (def debug
-  "Set to true to generate some more output and files."
-  false)
+  "Set to true to generate some more output and EDN/DOT files."
+  false
+  ;;true ;
+  )
 (def depth
   "The depth of the dependency tree to generate."
   2)
@@ -45,10 +47,12 @@
   "Directory where projects are generated"
   "test-projects")
 (def projects
-  "The project dependency tree"
+  "The project dependency tree with all the data for image and project gen."
   (cond-> (graph/projects depth projects-dir)
     debug (assoc :debug true)))
-(def apps (projects :apps))
+(def apps
+  "The list of all application project names, they are tree roots in the graph."
+  (projects :apps))
 
 (declare prjs-depth-first)
 (defn prjs-depth-first-
@@ -68,7 +72,7 @@
   ([root-prj]
    (distinct (graph/prjs-leaf-first projects root-prj))))
 (def prjs-leaf-first
-  "Return the list of all project names in the tree rooted in all applications
+  "Return the list of all project names in the trees rooted in all applications
   or the given project, starting from library leaves and ending with tree roots,
   so that dependencies always appear before the projects depending on them
   (post-recursive depth-first traversal).
