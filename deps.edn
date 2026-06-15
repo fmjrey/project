@@ -20,6 +20,8 @@
                       ;; duplicated in this project to sort out some issues
                       ;;macroz/tangle {:mvn/version "0.2.2"}
                       fmjrey/invoke {:local/root "../invoke"}
+                      datascript/datascript {:mvn/version "1.7.8"}
+                      no.cjohansen/dataspex {:mvn/version "2026.06.3"}
                       io.github.seancorfield/deps-new
                       {:git/tag "v0.12.1" :git/sha "883e82c"}
                       missionary/missionary {:mvn/version "b.47"}}

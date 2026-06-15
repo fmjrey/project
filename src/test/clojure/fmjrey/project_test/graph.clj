@@ -42,6 +42,8 @@
   (:require [clojure.string :as str]
             [clojure.pprint :as pp]
             [clojure.math.combinatorics :as combo]
+            [datascript.core :as d]
+            [dataspex.core :as dspx]
             [fmjrey.project-test.tangle :as tg]
             [clojure.java.io :as io]))
 
@@ -75,9 +77,7 @@
        (mapv (partial remove nil?))))
 
 ;;==============================================================================
-;; Graph/tree data structure and traversal logic.
-;;
-;; Note: it's getting difficult to maintain, datascript would be a better choice
+;; Graph/tree data structure and datascript database.
 ;;
 
 (def separator
@@ -118,7 +118,37 @@
                         :prefix     shared-lib-prefix
                         :counter    :lib-counter}}
    :projects-dir (str projects-dir)
-   })
+   ;; datascript
+   :db (d/create-conn
+        {;; projects
+         :prj/name     {:db/unique      :db.unique/identity}
+         :prj/type     {:db/index       true}
+         :prj/level    {:db/index       true}
+         :prj/builder  {:db/cardinality :db.cardinality/many}
+         :prj/builderv {:db/cardinality :db.cardinality/one}
+         :prj/deps     {:db/valueType   :db.type/ref
+                        :db/cardinality :db.cardinality/many}
+         :prj/node     {:db/valueType   :db.type/ref
+                        :db/cardinality :db.cardinality/one}
+         ;; graphviz nodes
+         :node/id       {:db/unique      :db.unique/identity}
+         :node/level    {:db/index       true}
+         ;;:node/label    {:db/valueType   :db.type/string}
+         :node/type     {:db/index       true}
+         :node/prj      {:db/valueType   :db.type/ref
+                         :db/cardinality :db.cardinality/many}
+         ;; graphviz edges
+         :edge/from    {:db/valueType   :db.type/ref
+                        :db/cardinality :db.cardinality/one}
+         ;;:edge/id+port {:db/valueType   :db.type/string}
+         :edge/to      {:db/valueType   :db.type/ref
+                        :db/cardinality :db.cardinality/one}
+         ;;
+         })})
+
+;;==============================================================================
+;; Graph/tree data structure traversal logic.
+;;
 
 (defn prjs-from-roots
   "Return a list of all projects, starting from root projects at the top, and
@@ -207,9 +237,11 @@
 (defn deps-node-name
   "Return the name (:id) of a graphviz node representing a set of deps of a
   given type, these deps being of a project with given name and level."
-  ([prj level type]
+  ([prj-or-prjs level type]
+   {:pre [(or (and (#{:app :lib} type) (string? prj-or-prjs))
+              (= :shared-lib type))]}
    (case type
-     (:app :lib)   (str deps-prefix separator prj)
+     (:app :lib)   (str deps-prefix separator prj-or-prjs)
      (:shared-lib) (str shared-deps-prefix separator level))))
 
 (defn deps-node-label
@@ -226,8 +258,8 @@
 (defn deps-node
   "Return a new graphviz node (a map) that represents a set of deps (libvs)
   of a given type, these deps being of a project with given name and level."
-  [prj level type libvs]
-  (let [deps-node-name (deps-node-name prj level type)]
+  [prj-or-prjs level type libvs]
+  (let [deps-node-name (deps-node-name prj-or-prjs level type)]
     {:id deps-node-name
      :shape :record
      :label (deps-node-label libvs)}))
@@ -239,27 +271,67 @@
       (update :deps (fnil into []) deps)
       (update :deps-nodes assoc type node+deps)))
 
+(defn update-prj-by-deps
+  [projects prj deps]
+  (update projects :by-deps
+          (fn [by-deps]
+            (reduce (fn [by-deps dep]
+                      (update by-deps dep (fnil conj []) prj))
+                    by-deps deps))))
+
+(defn prj->eid
+  "Return the (list of) entity ID(s) for the given (list of) project(s)."
+  [projects prj-or-prjs]
+  (cond
+    (string? prj-or-prjs)     (get-in projects [:by-name prj-or-prjs :db/id])
+    (sequential? prj-or-prjs) (mapv (partial prj->eid projects) prj-or-prjs)))
+
 (defn add-deps-to-tree
-  "Add to the projects tree a set of deps (libvs) of a given type as dependencies
-  of one or more projects with given names and same level."
-  [projects type level libvs prj-or-prjs]
+  "Add to the projects tree a set of deps (libvs) of a given type and level as
+  dependencies of one or more projects with given names. These deps (libvs)
+  and the prj-or-prjs they're for must already be present in the tree as this
+  function only handles the linkage between them."
+  [{db :db :as projects} libvs type level prj-or-prjs]
   (let [deps (mapv first libvs)
+        deps-eids (prj->eid projects deps)
         prjs (cond
                (string? prj-or-prjs)     [prj-or-prjs]
                (sequential? prj-or-prjs)  prj-or-prjs)
-        {to-id :id :as deps-node} (deps-node prj-or-prjs level type libvs)
-        node+deps [deps-node deps]]
+        {to-id :id label :label :as deps-node}
+        (deps-node prj-or-prjs level type libvs)
+        node-eid (-> (d/transact! ;; Create graph node entity
+                      db [{:db/id -1 :node/id to-id :node/label label
+                           :node/type type :node/level level
+                           :node/prj deps-eids}])
+                     :tempids (get -1))
+        node+deps [(assoc deps-node :db/id node-eid) deps]]
+
+    (d/transact! ;; Link projects to their deps and deps to graph node
+     db (into (mapv #(vector :db/add %1 :prj/node node-eid) deps-eids)
+              (mapv #(hash-map :prj/name %1 :prj/deps deps-eids) prjs)))
     (reduce
      (fn [projects prj]
-       (let [from-id (get-in projects [:by-name prj :node] prj)]
+       (let [from-id (get-in projects [:by-name prj :node])
+             from (if from-id (str from-id \: prj) prj)
+             {prj-eid :db/id prj-type :prj/type from-node :prj/node :as prj-ent}
+             (d/entity @db [:prj/name prj])
+             from-eid (or (:db/id from-node)
+                          (if (= :app prj-type)
+                            (-> (d/transact! ;; Create graph node for app
+                                 db [{:db/id -1 :node/id prj :node/label prj
+                                      :node/type :app :node/level 0
+                                      :node/prj prj-eid :prj/_node prj-eid}])
+                                :tempids (get -1))
+                            (throw (ex-info
+                                    (format "Found project without node: %s" prj)
+                                    prj-ent))))]
+         (d/transact! ;; graph edge
+          db [{:db/id -1 :edge/from from-eid :edge/id+port from
+               :edge/to node-eid}])
          (-> projects
              (update-in [:by-name prj] add-deps-to-prjm type node+deps)
-             (update :by-deps
-                     (fn [by-deps]
-                       (reduce (fn [by-deps dep]
-                                 (update by-deps dep (fnil conj []) prj))
-                               by-deps deps)))
-             (update :deps-edges conj [from-id to-id])
+             (update-prj-by-deps prj deps)
+             (update :deps-edges conj [from to-id])
              (update-in [:adjacent from-id] (fnil conj []) to-id))))
      (-> (reduce #(assoc-in %1 [:by-name %2 :node] to-id) projects deps)
          (update :node+deps conj node+deps))
@@ -267,20 +339,20 @@
 
 (defn add-prjm-to-tree
   "Add a new project map to the tree."
-  [projects {prj :name :keys [type level deps] :as prjm}]
+  [{db :db :as projects} {prj :name :keys [type level deps builder] :as prjm}]
   (if (contains? (projects :by-name) prj)
     (throw (ex-info (str "Project " prj " already registered") projects))
-    (let [counter (get-in projects [:types type :counter])]
+    (let [counter (get-in projects [:types type :counter])
+          eid (-> (d/transact! db [{:db/id -1
+                                    :prj/name prj :prj/type type :prj/level level
+                                    :prj/builder builder :prj/builderv builder}])
+                  :tempids (get -1))]
       (cond-> projects
         (= :app type) (update :apps conj prj)
-        prj (assoc-in [:by-name prj] prjm)
-        level (update-in [:by-level level] (fnil conj []) prj)
-        deps (update :by-deps
-                     (fn [by-deps]
-                       (reduce (fn [by-deps dep]
-                                 (update by-deps dep (fnil conj []) prj))
-                               by-deps deps)))
-        counter (update counter inc)))))
+        prj           (assoc-in [:by-name prj] (assoc prjm :db/id eid))
+        level         (update-in [:by-level level] (fnil conj []) prj)
+        deps          (update-prj-by-deps prj deps)
+        counter       (update counter inc)))))
 
 (defn add-prjvs-to-tree
   [projects prjvs]
@@ -288,13 +360,13 @@
        (reduce add-prjm-to-tree projects)))
 
 (defn add-new-deps-to-tree
-  "Create a new set of deps of a given type to be added to the projects tree as
-  dependencies of one or more projects with given names and same level."
+  "Create a new set of deps of a given type and level to be added to the
+  projects tree as dependencies of one or more projects with given names."
   [level type projects prj-or-prjs]
   (let [libvs (new-prjvs projects level type)]
     (-> projects
         (add-prjvs-to-tree libvs)
-        (add-deps-to-tree type level libvs prj-or-prjs))))
+        (add-deps-to-tree libvs type level prj-or-prjs))))
 
 (defn projects
   "Generate a test project tree with the given depth and output dir. The
@@ -302,9 +374,12 @@
   projects are libraries without any dependency and separated from the top
   applications by a number of edges equal to the specified graph depth.
   The provided dir specifies where graphs SVGs are generated."
-  [depth dir]
-  (loop [projects (initial-projects depth dir)
-         level    0]
+  [depth dir debug]
+  (loop [{db :db :as projects} (cond-> (initial-projects depth dir)
+                                 debug (assoc :debug true))
+         level 0]
+    (when debug
+      (dspx/inspect "Datascript" db {:track-changes? true :history-limit 25}))
     (cond
       (zero? level)
       (let [appvs (new-prjvs projects level :app)

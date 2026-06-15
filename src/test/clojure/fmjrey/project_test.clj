@@ -25,6 +25,8 @@
             [clojure.test :as test :refer :all]
             [clojure.java.io :as io]
             [clojure.java.process :as cjp]
+            [datascript.core :as d]
+            [dataspex.core :as dataspex]
             [fmjrey.invoke :as ext]
             [fmjrey.project-test.graph :as graph]
             [fmjrey.project-test.templating :as tmpl]))
@@ -81,10 +83,10 @@
        (update :nss (fnil conj []) (-> event :ns ns-name))
        (= :begin-test-var type)
        (-> (update :vars (fnil conj []) (-> event :var meta :name))
-           (assoc-in [:by-ns (last nss) (-> event :var meta :name)]
+           (assoc-in [:by-ns (peek nss) (-> event :var meta :name)]
                      {:pass [] :fail [] :error []}))
        (#{:pass :fail :error} type)
-       (update-in [:by-ns (last nss) (last vars) type] conj event)
+       (update-in [:by-ns (peek nss) (peek vars) type] conj event)
        (= :summary type)
        ((fn [test-results]
           (with-open [wr (io/writer (io/file tmpl/projects-dir "test-results.edn"))]

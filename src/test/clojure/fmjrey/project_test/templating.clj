@@ -19,6 +19,7 @@
             [clojure.java.io :as io]
             [org.corfield.new :as new]
             [missionary.core :as m]
+            [dataspex.core :as dspx]
             [clj-duration.core :as dur]
             [fmjrey.invoke :as ext]
             [fmjrey.project-test.graph :as graph]))
@@ -37,8 +38,8 @@
   )
 (def debug
   "Set to true to generate some more output and EDN/DOT files."
-  false
-  ;;true ;
+  ;;false
+  true ;
   )
 (def depth
   "The depth of the dependency tree to generate."
@@ -48,8 +49,12 @@
   "test-projects")
 (def projects
   "The project dependency tree with all the data for image and project gen."
-  (cond-> (graph/projects depth projects-dir)
-    debug (assoc :debug true)))
+  (let [projects (graph/projects depth projects-dir debug)]
+    (when debug
+      (dspx/inspect "Projects" projects
+                    {:track-changes? true :history-limit 25}))
+    projects))
+
 (def apps
   "The list of all application project names, they are tree roots in the graph."
   (projects :apps))
@@ -89,9 +94,6 @@
   [artifact-id]
   (str/replace artifact-id "-" "_"))
 
-(defn ->project-ns-str
-  [prj]
-  (str "test." (str/replace prj "_" "-")))
 (defn ->project-lib
   [prj]
   (symbol "test" (str/replace prj "_" "-")))
@@ -258,6 +260,7 @@
   [prj]
   (->> (get-in projects [:by-name prj])
        project-info
+       ((fn [x] (println "PI " x) x))
        build))
 
 (defn build-prj-task
